@@ -110,7 +110,7 @@ function extractUrls(text: string): string[] {
   return text.match(urlRegex) || [];
 }
 
-// ─── Google Safe Browsing check ───────────────────────────────────────────────
+// ─── Google Safe Browsing ─────────────────────────────────────────────────────
 
 async function checkGoogleSafeBrowsing(urls: string[]): Promise<boolean> {
   const apiKey = process.env.GOOGLE_SAFE_BROWSING_API_KEY;
@@ -140,7 +140,7 @@ async function checkGoogleSafeBrowsing(urls: string[]): Promise<boolean> {
   }
 }
 
-// ─── destroy.tools API v1 check ───────────────────────────────────────────────
+// ─── destroy.tools API v1 ─────────────────────────────────────────────────────
 
 async function checkDestroyTools(urls: string[]): Promise<{ hit: boolean; critical: boolean }> {
   if (urls.length === 0) return { hit: false, critical: false };
@@ -165,6 +165,39 @@ async function checkDestroyTools(urls: string[]): Promise<{ hit: boolean; critic
   return { hit: false, critical: false };
 }
 
+// ─── URLhaus (abuse.ch) ───────────────────────────────────────────────────────
+
+async function checkURLhaus(urls: string[]): Promise<boolean> {
+  if (urls.length === 0) return false;
+
+  for (const url of urls) {
+    try {
+      const formData = new URLSearchParams();
+      formData.append("url", url);
+
+      const res = await fetch("https://urlhaus-api.abuse.ch/v1/url/", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: formData.toString(),
+      });
+
+      if (!res.ok) continue;
+      const data = await res.json();
+
+      // query_status: "is_host" = found in database as malicious
+      if (data.query_status === "is_url" && data.url_status === "online") {
+        return true;
+      }
+      if (data.query_status === "is_url" && data.url_status === "unknown") {
+        return true;
+      }
+    } catch {
+      continue;
+    }
+  }
+  return false;
+}
+
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
@@ -181,16 +214,18 @@ export async function POST(req: NextRequest) {
     const urls = extractUrls(text);
     const sources: string[] = [];
 
-    // 1. Sjekk URL-er mot eksterne API-er (parallelt)
-    const [googleHit, destroyResult] = await Promise.all([
+    // Sjekk alle API-er parallelt
+    const [googleHit, destroyResult, urlhausHit] = await Promise.all([
       checkGoogleSafeBrowsing(urls),
       checkDestroyTools(urls),
+      checkURLhaus(urls),
     ]);
 
     if (googleHit) sources.push("Google Safe Browsing");
     if (destroyResult.hit) sources.push("destroy.tools");
+    if (urlhausHit) sources.push("URLhaus");
 
-    // 2. Mønsteranalyse
+    // Mønsteranalyse
     const hasDangerKeyword = DANGER_PATTERNS.some((p) => p.test(text));
     const hasSuspiciousKeyword = SUSPICIOUS_PATTERNS.some((p) => p.test(text));
     const hasSuspiciousUrl = urls.some((u) => SUSPICIOUS_URL_PATTERNS.some((p) => p.test(u)));
@@ -198,9 +233,9 @@ export async function POST(req: NextRequest) {
     if (hasDangerKeyword) sources.push("nøkkelord-analyse");
     if (hasSuspiciousUrl) sources.push("mistenkelig URL-mønster");
 
-    // 3. Fastsett resultat
+    // Fastsett resultat
     let verdict: Verdict;
-    if (googleHit || destroyResult.critical || hasDangerKeyword) {
+    if (googleHit || destroyResult.critical || hasDangerKeyword || urlhausHit) {
       verdict = "FARLIG";
     } else if (destroyResult.hit || hasSuspiciousKeyword || hasSuspiciousUrl) {
       verdict = "MISTENKELIG";
@@ -217,6 +252,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(result);
   } catch (err) {
+    console.error("Check API feil:", err);
     return NextResponse.json({ error: "Analyse mislyktes" }, { status: 500 });
   }
 }
