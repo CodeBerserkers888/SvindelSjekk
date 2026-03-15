@@ -11,6 +11,7 @@ interface CheckResult {
   explanation: string;
   tips: string[];
   sources: string[];
+  checkedDatabases: { name: string; found: boolean; description: string }[];
 }
 
 const verdictStyle: Record<Verdict, { bg: string; border: string; titleColor: string; textColor: string; label: string }> = {
@@ -36,6 +37,7 @@ export default function SvindelSjekk() {
   const [showReport, setShowReport] = useState(false);
   const [reportNote, setReportNote] = useState("");
   const [reportSent, setReportSent] = useState(false);
+  const [showDatabases, setShowDatabases] = useState(false);
 
   const handleCheck = async () => {
     if (!input.trim()) return;
@@ -44,6 +46,7 @@ export default function SvindelSjekk() {
     setError("");
     setShowReport(false);
     setReportSent(false);
+    setShowDatabases(false);
 
     try {
       const res = await fetch("/api/check", {
@@ -160,7 +163,7 @@ export default function SvindelSjekk() {
             </div>
             <p className={`text-lg leading-relaxed mb-4 ${style.textColor}`}>{result.explanation}</p>
             {result.tips?.length > 0 && (
-              <ul className="space-y-2">
+              <ul className="space-y-2 mb-4">
                 {result.tips.map((tip, i) => (
                   <li key={i} className={`text-base flex gap-2 ${style.textColor}`}>
                     <span className="font-bold">→</span><span>{tip}</span>
@@ -168,10 +171,34 @@ export default function SvindelSjekk() {
                 ))}
               </ul>
             )}
-            {result.sources?.length > 0 && (
-              <p className={`text-sm mt-4 opacity-70 ${style.textColor}`}>
-                Oppdaget av: {result.sources.join(", ")}
-              </p>
+
+            {/* Database results */}
+            {result.checkedDatabases?.length > 0 && (
+              <div className="mt-4 border-t border-current border-opacity-20 pt-4">
+                <button
+                  onClick={() => setShowDatabases(!showDatabases)}
+                  className={`text-sm font-medium flex items-center gap-2 ${style.textColor}`}
+                >
+                  <span>🔍 Sjekket {result.checkedDatabases.length} databaser</span>
+                  <span>{showDatabases ? "▲" : "▼"}</span>
+                </button>
+
+                {showDatabases && (
+                  <div className="mt-3 space-y-2">
+                    {result.checkedDatabases.map((db, i) => (
+                      <div key={i} className="flex items-center justify-between bg-white bg-opacity-50 rounded-xl px-3 py-2">
+                        <div>
+                          <span className="text-sm font-medium text-slate-700">{db.name}</span>
+                          <p className="text-xs text-slate-500">{db.description}</p>
+                        </div>
+                        <span className={`text-lg flex-shrink-0 ml-2 ${db.found ? "text-red-600" : "text-green-600"}`}>
+                          {db.found ? "🚨" : "✅"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         )}
