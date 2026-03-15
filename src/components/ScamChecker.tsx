@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 
 type Verdict = "FARLIG" | "MISTENKELIG" | "TRYGG";
 
@@ -263,6 +264,11 @@ export default function SvindelSjekk() {
 
         <p className="text-center text-base text-slate-400 pb-4">
           SvindelSjekk er gratis. Vi lagrer ikke meldingene dine.
+        </p>
+        <Link href="/statistikk" className="block text-center text-base text-blue-500 hover:text-blue-700 underline pb-6">
+          📊 Se statistikk over innrapporterte svindler →
+        </Link>
+        <p className="hidden">
         </p>
       </div>
     </div>
