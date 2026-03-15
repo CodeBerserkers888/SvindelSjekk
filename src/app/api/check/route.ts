@@ -184,11 +184,8 @@ async function checkURLhaus(urls: string[]): Promise<boolean> {
       if (!res.ok) continue;
       const data = await res.json();
 
-      // query_status: "is_host" = found in database as malicious
-      if (data.query_status === "is_url" && data.url_status === "online") {
-        return true;
-      }
-      if (data.query_status === "is_url" && data.url_status === "unknown") {
+      if (data.query_status === "is_url" && 
+          (data.url_status === "online" || data.url_status === "unknown")) {
         return true;
       }
     } catch {
@@ -196,6 +193,63 @@ async function checkURLhaus(urls: string[]): Promise<boolean> {
     }
   }
   return false;
+}
+
+// ─── VirusTotal ───────────────────────────────────────────────────────────────
+
+async function checkVirusTotal(urls: string[]): Promise<{ hit: boolean; critical: boolean }> {
+  const apiKey = process.env.VIRUSTOTAL_API_KEY;
+  if (!apiKey || urls.length === 0) return { hit: false, critical: false };
+
+  for (const url of urls) {
+    try {
+      // VirusTotal krever base64url-encoded URL som ID
+      const urlId = Buffer.from(url).toString("base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+
+      const res = await fetch(`https://www.virustotal.com/api/v3/urls/${urlId}`, {
+        headers: { "x-apikey": apiKey },
+      });
+
+      if (res.status === 404) {
+        // URL ikke analysert ennå — send til analyse
+        const scanRes = await fetch("https://www.virustotal.com/api/v3/urls", {
+          method: "POST",
+          headers: {
+            "x-apikey": apiKey,
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: `url=${encodeURIComponent(url)}`,
+        });
+        if (!scanRes.ok) continue;
+        // Ny URL — ikke nok data ennå, hopp over
+        continue;
+      }
+
+      if (!res.ok) continue;
+      const data = await res.json();
+
+      const stats = data?.data?.attributes?.last_analysis_stats;
+      if (!stats) continue;
+
+      const malicious = stats.malicious ?? 0;
+      const suspicious = stats.suspicious ?? 0;
+      const total = malicious + suspicious + (stats.harmless ?? 0) + (stats.undetected ?? 0);
+
+      if (total === 0) continue;
+
+      // Kritisk: 3+ motorer rapporterer malicious
+      if (malicious >= 3) {
+        return { hit: true, critical: malicious >= 5 };
+      }
+      // Mistenkelig: 1-2 motorer
+      if (malicious >= 1 || suspicious >= 2) {
+        return { hit: true, critical: false };
+      }
+    } catch {
+      continue;
+    }
+  }
+  return { hit: false, critical: false };
 }
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
@@ -215,15 +269,17 @@ export async function POST(req: NextRequest) {
     const sources: string[] = [];
 
     // Sjekk alle API-er parallelt
-    const [googleHit, destroyResult, urlhausHit] = await Promise.all([
+    const [googleHit, destroyResult, urlhausHit, virusTotalResult] = await Promise.all([
       checkGoogleSafeBrowsing(urls),
       checkDestroyTools(urls),
       checkURLhaus(urls),
+      checkVirusTotal(urls),
     ]);
 
     if (googleHit) sources.push("Google Safe Browsing");
     if (destroyResult.hit) sources.push("destroy.tools");
     if (urlhausHit) sources.push("URLhaus");
+    if (virusTotalResult.hit) sources.push("VirusTotal");
 
     // Mønsteranalyse
     const hasDangerKeyword = DANGER_PATTERNS.some((p) => p.test(text));
@@ -235,9 +291,9 @@ export async function POST(req: NextRequest) {
 
     // Fastsett resultat
     let verdict: Verdict;
-    if (googleHit || destroyResult.critical || hasDangerKeyword || urlhausHit) {
+    if (googleHit || destroyResult.critical || hasDangerKeyword || urlhausHit || virusTotalResult.critical) {
       verdict = "FARLIG";
-    } else if (destroyResult.hit || hasSuspiciousKeyword || hasSuspiciousUrl) {
+    } else if (destroyResult.hit || hasSuspiciousKeyword || hasSuspiciousUrl || virusTotalResult.hit) {
       verdict = "MISTENKELIG";
     } else {
       verdict = "TRYGG";
