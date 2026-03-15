@@ -114,28 +114,34 @@ function extractUrls(text: string): string[] {
 
 async function checkGoogleSafeBrowsing(urls: string[]): Promise<boolean> {
   const apiKey = process.env.GOOGLE_SAFE_BROWSING_API_KEY;
+  console.log("[GSB] apiKey present:", !!apiKey, "urls:", urls);
   if (!apiKey || urls.length === 0) return false;
 
   try {
+    const body = {
+      client: { clientId: "svindelsjekk", clientVersion: "1.0.0" },
+      threatInfo: {
+        threatTypes: ["MALWARE", "SOCIAL_ENGINEERING", "UNWANTED_SOFTWARE", "POTENTIALLY_HARMFUL_APPLICATION"],
+        platformTypes: ["ANY_PLATFORM"],
+        threatEntryTypes: ["URL"],
+        threatEntries: urls.map((url) => ({ url })),
+      },
+    };
+    console.log("[GSB] request body:", JSON.stringify(body));
+
     const res = await fetch(
       `https://safebrowsing.googleapis.com/v4/threatMatches:find?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          client: { clientId: "svindelsjekk", clientVersion: "1.0.0" },
-          threatInfo: {
-            threatTypes: ["MALWARE", "SOCIAL_ENGINEERING", "UNWANTED_SOFTWARE", "POTENTIALLY_HARMFUL_APPLICATION"],
-            platformTypes: ["ANY_PLATFORM"],
-            threatEntryTypes: ["URL"],
-            threatEntries: urls.map((url) => ({ url })),
-          },
-        }),
+        body: JSON.stringify(body),
       }
     );
     const data = await res.json();
+    console.log("[GSB] response status:", res.status, "data:", JSON.stringify(data));
     return !!(data.matches && data.matches.length > 0);
-  } catch {
+  } catch (err) {
+    console.error("[GSB] error:", err);
     return false;
   }
 }
@@ -148,9 +154,11 @@ async function checkDestroyTools(urls: string[]): Promise<{ hit: boolean; critic
   for (const url of urls) {
     try {
       const domain = new URL(url.startsWith("http") ? url : `https://${url}`).hostname;
+      console.log("[Destroy] checking domain:", domain);
       const res = await fetch(`https://api.destroy.tools/v1/check?domain=${encodeURIComponent(domain)}`);
       if (!res.ok) continue;
       const data: DestroyResult = await res.json();
+      console.log("[Destroy] response:", JSON.stringify(data));
 
       if (data.threat && data.risk_score >= 60) {
         return {
@@ -158,7 +166,8 @@ async function checkDestroyTools(urls: string[]): Promise<{ hit: boolean; critic
           critical: data.severity === "critical" || data.risk_score >= 80,
         };
       }
-    } catch {
+    } catch (err) {
+      console.error("[Destroy] error:", err);
       continue;
     }
   }
@@ -179,18 +188,19 @@ export async function POST(req: NextRequest) {
     }
 
     const urls = extractUrls(text);
+    console.log("[Main] extracted urls:", urls);
     const sources: string[] = [];
 
-    // 1. Sjekk URL-er mot eksterne API-er (parallelt)
     const [googleHit, destroyResult] = await Promise.all([
       checkGoogleSafeBrowsing(urls),
       checkDestroyTools(urls),
     ]);
 
+    console.log("[Main] googleHit:", googleHit, "destroyResult:", destroyResult);
+
     if (googleHit) sources.push("Google Safe Browsing");
     if (destroyResult.hit) sources.push("destroy.tools");
 
-    // 2. Mønsteranalyse
     const hasDangerKeyword = DANGER_PATTERNS.some((p) => p.test(text));
     const hasSuspiciousKeyword = SUSPICIOUS_PATTERNS.some((p) => p.test(text));
     const hasSuspiciousUrl = urls.some((u) => SUSPICIOUS_URL_PATTERNS.some((p) => p.test(u)));
@@ -198,7 +208,6 @@ export async function POST(req: NextRequest) {
     if (hasDangerKeyword) sources.push("nøkkelord-analyse");
     if (hasSuspiciousUrl) sources.push("mistenkelig URL-mønster");
 
-    // 3. Fastsett resultat
     let verdict: Verdict;
     if (googleHit || destroyResult.critical || hasDangerKeyword) {
       verdict = "FARLIG";
