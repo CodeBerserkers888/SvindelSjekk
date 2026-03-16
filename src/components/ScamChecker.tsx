@@ -15,12 +15,6 @@ interface CheckResult {
   checkedDatabases: { name: string; found: boolean; description: string }[];
 }
 
-const verdictStyle: Record<Verdict, { bg: string; border: string; titleColor: string; textColor: string; label: string }> = {
-  FARLIG:      { bg: "bg-red-50",   border: "border-red-400",   titleColor: "text-red-800",   textColor: "text-red-700",   label: "SVINDEL" },
-  MISTENKELIG: { bg: "bg-amber-50", border: "border-amber-400", titleColor: "text-amber-800", textColor: "text-amber-700", label: "MISTENKELIG" },
-  TRYGG:       { bg: "bg-green-50", border: "border-green-400", titleColor: "text-green-800", textColor: "text-green-700", label: "TRYGG" },
-};
-
 const TIPS = [
   "Ingen bank ber om passord eller BankID via SMS",
   "Haster det veldig? Det er et tegn på svindel",
@@ -48,7 +42,6 @@ export default function SvindelSjekk() {
     setShowReport(false);
     setReportSent(false);
     setShowDatabases(false);
-
     try {
       const res = await fetch("/api/check", {
         method: "POST",
@@ -69,132 +62,140 @@ export default function SvindelSjekk() {
     await fetch("/api/report", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: input, note: reportNote, verdict: result?.verdict, lang: "no" }),
+      body: JSON.stringify({ text: input, note: reportNote, verdict: result?.verdict, sources: result?.sources, lang: "no" }),
     });
     setReportSent(true);
   };
 
-  const style = result ? verdictStyle[result.verdict] : null;
+  const verdictConfig = {
+    FARLIG:      { bg: "bg-red-50",   border: "border-red-300",   title: "text-red-900",   body: "text-red-700",   badge: "bg-red-600 text-white",   label: "SVINDEL" },
+    MISTENKELIG: { bg: "bg-amber-50", border: "border-amber-300", title: "text-amber-900", body: "text-amber-700", badge: "bg-amber-500 text-white",  label: "MISTENKELIG" },
+    TRYGG:       { bg: "bg-emerald-50", border: "border-emerald-300", title: "text-emerald-900", body: "text-emerald-700", badge: "bg-emerald-600 text-white", label: "TRYGG" },
+  };
+
+  const v = result ? verdictConfig[result.verdict] : null;
 
   return (
-    <div className="min-h-screen bg-blue-50 flex flex-col items-center py-10 px-4">
-      <div className="w-full max-w-lg">
+    <div className="min-h-screen bg-slate-50" style={{ fontFamily: "'Georgia', serif" }}>
 
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="flex justify-center mb-4">
-            <svg width="72" height="72" viewBox="0 0 64 64" fill="none">
-              <path d="M32 4L8 14v18c0 14 11 26 24 28 13-2 24-14 24-28V14L32 4z" fill="#dbeafe" stroke="#1d4ed8" strokeWidth="2.5"/>
-              <path d="M22 32l7 7 13-13" stroke="#1d4ed8" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
+      {/* Hero header */}
+      <div className="bg-gradient-to-b from-blue-950 to-blue-900 pt-10 pb-16 px-4">
+        <div className="max-w-lg mx-auto text-center">
+          <div className="flex justify-center mb-5">
+            <div className="w-16 h-16 rounded-2xl bg-blue-800 border-2 border-blue-600 flex items-center justify-center">
+              <svg width="36" height="36" viewBox="0 0 64 64" fill="none">
+                <path d="M32 6L10 16v18c0 13 10 24 22 26 12-2 22-13 22-26V16L32 6z" fill="#1e40af" stroke="#60a5fa" strokeWidth="2.5"/>
+                <path d="M22 32l7 7 13-13" stroke="#60a5fa" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
           </div>
-          <h1 className="text-4xl font-bold text-blue-900 mb-2">SvindelSjekk</h1>
-          <p className="text-xl text-blue-700">Er denne meldingen svindel?</p>
+          <h1 className="text-4xl font-bold text-white mb-2 tracking-tight">SvindelSjekk</h1>
+          <p className="text-blue-300 text-lg">Er denne meldingen svindel?</p>
         </div>
+      </div>
 
-        {/* Mode tabs */}
-        <div className="flex gap-3 mb-5">
-          {(["sms", "link"] as const).map((m) => (
-            <button
-              key={m}
-              onClick={() => { setMode(m); setResult(null); setError(""); }}
-              className={`flex-1 py-5 rounded-2xl border-2 text-center transition-all font-medium text-lg ${
-                mode === m
-                  ? "border-blue-700 bg-white text-blue-800 shadow-sm"
-                  : "border-blue-200 bg-white/60 text-blue-400 hover:border-blue-300"
-              }`}
-            >
-              <span className="text-4xl block mb-1">{m === "sms" ? "💬" : "🔗"}</span>
-              {m === "sms" ? "SMS eller e-post" : "Lenke / nettadresse"}
-            </button>
-          ))}
-        </div>
+      <div className="max-w-lg mx-auto px-4 -mt-8">
 
-        {/* Input */}
-        <div className="bg-white rounded-2xl border-2 border-blue-100 p-5 mb-4 shadow-sm">
-          <label className="block text-lg font-medium text-slate-600 mb-2">
-            {mode === "sms" ? "Lim inn meldingen her:" : "Lim inn lenken her:"}
-          </label>
+        {/* Main card */}
+        <div className="bg-white rounded-3xl shadow-xl border border-slate-200 p-6 mb-5">
+
+          {/* Mode tabs */}
+          <div className="flex gap-2 mb-5 bg-slate-100 rounded-2xl p-1">
+            {(["sms", "link"] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => { setMode(m); setResult(null); setError(""); }}
+                className={`flex-1 py-3 rounded-xl text-base font-semibold transition-all flex items-center justify-center gap-2 ${
+                  mode === m ? "bg-white text-blue-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                <span>{m === "sms" ? "💬" : "🔗"}</span>
+                {m === "sms" ? "SMS / E-post" : "Lenke"}
+              </button>
+            ))}
+          </div>
+
+          {/* Textarea */}
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={mode === "sms"
-              ? "F.eks: «Din konto er sperret. Logg inn nå: ...»"
-              : "F.eks: https://dnb-sikker.com/logg-inn"}
+              ? "Lim inn meldingen her…\n\nF.eks: «Din konto er sperret. Logg inn nå»"
+              : "Lim inn lenken her…\n\nF.eks: https://dnb-sikker.com/logg-inn"}
             rows={5}
-            className="w-full text-xl text-slate-800 placeholder-slate-300 resize-none border-0 outline-none bg-transparent leading-relaxed"
+            className="w-full text-lg text-slate-800 placeholder-slate-300 resize-none border-0 outline-none bg-slate-50 rounded-2xl p-4 leading-relaxed mb-4"
+            style={{ fontFamily: "'Georgia', serif" }}
           />
+
           <button
             onClick={handleCheck}
             disabled={loading || !input.trim()}
-            className="w-full mt-4 py-5 rounded-xl text-2xl font-bold transition-all
+            className="w-full py-4 rounded-2xl text-xl font-bold transition-all
               disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed
-              bg-blue-700 text-white hover:bg-blue-800 active:scale-[0.98]"
+              bg-blue-900 text-white hover:bg-blue-800 active:scale-[0.98]"
           >
             {loading ? (
               <span className="flex items-center justify-center gap-3">
-                <svg className="animate-spin h-6 w-6" viewBox="0 0 24 24" fill="none">
+                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
                 </svg>
                 Sjekker…
               </span>
-            ) : "Sjekk nå"}
+            ) : "Sjekk nå →"}
           </button>
         </div>
 
         {/* Error */}
         {error && (
-          <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-4 mb-4 text-red-700 text-lg">
+          <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-4 text-red-700 text-base">
             {error}
           </div>
         )}
 
         {/* Result */}
-        {result && style && (
-          <div className={`${style.bg} border-2 ${style.border} rounded-2xl p-6 mb-4`}>
-            <div className="flex items-center gap-4 mb-3">
+        {result && v && (
+          <div className={`${v.bg} border-2 ${v.border} rounded-3xl p-6 mb-4 shadow-sm`}>
+            <div className="flex items-start gap-4 mb-4">
               <span className="text-5xl">{result.emoji}</span>
-              <div>
-                <div className={`text-sm font-bold uppercase tracking-widest ${style.textColor} mb-0.5`}>
-                  {style.label}
-                </div>
-                <div className={`text-2xl font-bold ${style.titleColor}`}>{result.title}</div>
+              <div className="flex-1">
+                <span className={`inline-block text-xs font-bold px-3 py-1 rounded-full mb-2 ${v.badge}`}>
+                  {v.label}
+                </span>
+                <h2 className={`text-xl font-bold leading-snug ${v.title}`}>{result.title}</h2>
               </div>
             </div>
-            <p className={`text-lg leading-relaxed mb-4 ${style.textColor}`}>{result.explanation}</p>
+            <p className={`text-base leading-relaxed mb-4 ${v.body}`}>{result.explanation}</p>
+
             {result.tips?.length > 0 && (
-              <ul className="space-y-2 mb-4">
+              <div className="space-y-2 mb-4">
                 {result.tips.map((tip, i) => (
-                  <li key={i} className={`text-base flex gap-2 ${style.textColor}`}>
-                    <span className="font-bold">→</span><span>{tip}</span>
-                  </li>
+                  <div key={i} className={`flex gap-3 items-start text-sm ${v.body}`}>
+                    <span className="font-bold mt-0.5">→</span><span>{tip}</span>
+                  </div>
                 ))}
-              </ul>
+              </div>
             )}
 
-            {/* Database results */}
+            {/* Database accordion */}
             {result.checkedDatabases?.length > 0 && (
-              <div className="mt-4 border-t border-current border-opacity-20 pt-4">
+              <div className="border-t border-current border-opacity-20 pt-4 mt-2">
                 <button
                   onClick={() => setShowDatabases(!showDatabases)}
-                  className={`text-sm font-medium flex items-center gap-2 ${style.textColor}`}
+                  className={`text-sm font-semibold flex items-center gap-2 w-full ${v.body}`}
                 >
                   <span>🔍 Sjekket {result.checkedDatabases.length} databaser</span>
-                  <span>{showDatabases ? "▲" : "▼"}</span>
+                  <span className="ml-auto">{showDatabases ? "▲" : "▼"}</span>
                 </button>
-
                 {showDatabases && (
                   <div className="mt-3 space-y-2">
                     {result.checkedDatabases.map((db, i) => (
-                      <div key={i} className="flex items-center justify-between bg-white bg-opacity-50 rounded-xl px-3 py-2">
+                      <div key={i} className="flex items-center justify-between bg-white bg-opacity-60 rounded-xl px-3 py-2">
                         <div>
-                          <span className="text-sm font-medium text-slate-700">{db.name}</span>
+                          <p className="text-sm font-semibold text-slate-700">{db.name}</p>
                           <p className="text-xs text-slate-500">{db.description}</p>
                         </div>
-                        <span className={`text-lg flex-shrink-0 ml-2 ${db.found ? "text-red-600" : "text-green-600"}`}>
-                          {db.found ? "🚨" : "✅"}
-                        </span>
+                        <span className="text-lg ml-3 flex-shrink-0">{db.found ? "🚨" : "✅"}</span>
                       </div>
                     ))}
                   </div>
@@ -206,32 +207,27 @@ export default function SvindelSjekk() {
 
         {/* Report */}
         {result && (
-          <div className="bg-white rounded-2xl border-2 border-slate-100 p-5 mb-6 shadow-sm">
+          <div className="bg-white rounded-3xl border border-slate-200 p-5 mb-5 shadow-sm">
             {!showReport ? (
               <button
                 onClick={() => setShowReport(true)}
-                className="w-full py-4 text-lg text-red-600 border-2 border-red-100 rounded-xl hover:bg-red-50 transition-colors font-medium"
+                className="w-full py-3 text-base text-red-600 border border-red-200 rounded-2xl hover:bg-red-50 transition-colors font-semibold"
               >
                 ⚠️ Rapporter dette som svindel
               </button>
             ) : reportSent ? (
-              <p className="text-center text-green-700 text-lg py-2 font-medium">
-                ✓ Takk! Rapporten er sendt.
-              </p>
+              <p className="text-center text-emerald-700 text-base py-2 font-semibold">✓ Takk! Rapporten er sendt.</p>
             ) : (
               <div className="space-y-3">
-                <p className="text-base text-slate-500">Legg til detaljer (valgfritt):</p>
+                <p className="text-sm text-slate-500 font-medium">Legg til detaljer (valgfritt):</p>
                 <textarea
                   value={reportNote}
                   onChange={(e) => setReportNote(e.target.value)}
                   placeholder="F.eks: Fikk denne fra ukjent nummer…"
                   rows={3}
-                  className="w-full text-lg text-slate-700 placeholder-slate-300 border-2 border-slate-200 rounded-xl p-3 resize-none outline-none focus:border-blue-400"
+                  className="w-full text-base text-slate-700 placeholder-slate-300 border border-slate-200 rounded-xl p-3 resize-none outline-none focus:border-blue-400 bg-slate-50"
                 />
-                <button
-                  onClick={handleReport}
-                  className="w-full py-4 bg-red-600 text-white text-lg font-bold rounded-xl hover:bg-red-700 transition-colors"
-                >
+                <button onClick={handleReport} className="w-full py-3 bg-red-600 text-white text-base font-bold rounded-xl hover:bg-red-700 transition-colors">
                   Send rapport
                 </button>
               </div>
@@ -240,38 +236,55 @@ export default function SvindelSjekk() {
         )}
 
         {/* Tips */}
-        <div className="bg-white rounded-2xl border-2 border-blue-100 p-6 shadow-sm mb-6">
-          <h2 className="text-xl font-bold text-slate-700 mb-4">🔎 Slik kjenner du igjen svindel</h2>
-          <ul className="space-y-4">
+        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm mb-4">
+          <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+            <span>🔎</span> Slik kjenner du igjen svindel
+          </h2>
+          <ul className="space-y-3">
             {TIPS.map((tip, i) => (
               <li key={i} className="flex gap-3 items-start">
-                <span className="w-3 h-3 rounded-full bg-blue-500 flex-shrink-0 mt-2" />
-                <span className="text-lg text-slate-600 leading-snug">{tip}</span>
+                <span className="w-6 h-6 rounded-full bg-blue-900 text-white text-xs flex items-center justify-center flex-shrink-0 mt-0.5 font-bold">{i + 1}</span>
+                <span className="text-base text-slate-600 leading-snug">{tip}</span>
               </li>
             ))}
           </ul>
         </div>
 
-        {/* Nødnumre */}
-        <div className="bg-blue-900 rounded-2xl p-5 mb-6 text-white">
-          <h2 className="text-lg font-bold mb-3">📞 Nyttige numre</h2>
-          <div className="space-y-2 text-base">
-            <div className="flex justify-between"><span>Politiet</span><span className="font-bold">02800</span></div>
-            <div className="flex justify-between"><span>Svindelvarsling (Forbrukerrådet)</span><span className="font-bold">23 40 06 00</span></div>
-            <div className="flex justify-between"><span>Nødnummer</span><span className="font-bold">112</span></div>
+        {/* Emergency numbers */}
+        <div className="bg-blue-950 rounded-3xl p-5 mb-4 text-white shadow-sm">
+          <h2 className="text-base font-bold mb-3 text-blue-300 uppercase tracking-wider">📞 Nyttige numre</h2>
+          <div className="space-y-3">
+            <div className="flex justify-between items-center border-b border-blue-800 pb-3">
+              <span className="text-base text-blue-100">Politiet</span>
+              <span className="text-xl font-bold text-white">02800</span>
+            </div>
+            <div className="flex justify-between items-center border-b border-blue-800 pb-3">
+              <span className="text-base text-blue-100">Forbrukerrådet svindel</span>
+              <span className="text-xl font-bold text-white">23 40 06 00</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-base text-blue-100">Nødnummer</span>
+              <span className="text-xl font-bold text-white">112</span>
+            </div>
           </div>
         </div>
 
-        <p className="text-center text-base text-slate-400 pb-4">
+        {/* Nav links */}
+        <div className="grid grid-cols-2 gap-3 mb-6">
+          <Link href="/nyheter" className="bg-white rounded-2xl border border-slate-200 p-4 text-center hover:border-blue-400 hover:shadow-md transition-all shadow-sm">
+            <span className="text-2xl block mb-1">📰</span>
+            <span className="text-sm font-bold text-slate-700">Svindelnyheter</span>
+            <p className="text-xs text-slate-400 mt-1">Siste advarsler</p>
+          </Link>
+          <Link href="/statistikk" className="bg-white rounded-2xl border border-slate-200 p-4 text-center hover:border-blue-400 hover:shadow-md transition-all shadow-sm">
+            <span className="text-2xl block mb-1">📊</span>
+            <span className="text-sm font-bold text-slate-700">Statistikk</span>
+            <p className="text-xs text-slate-400 mt-1">Innrapportert svindel</p>
+          </Link>
+        </div>
+
+        <p className="text-center text-xs text-slate-400 pb-8">
           SvindelSjekk er gratis. Vi lagrer ikke meldingene dine.
-        </p>
-        <Link href="/nyheter" className="block text-center text-base text-blue-500 hover:text-blue-700 underline pb-2">
-          📰 Siste svindelnyheter og advarsler →
-        </Link>
-        <Link href="/statistikk" className="block text-center text-base text-blue-500 hover:text-blue-700 underline pb-6">
-          📊 Se statistikk over innrapporterte svindler →
-        </Link>
-        <p className="hidden">
         </p>
       </div>
     </div>
