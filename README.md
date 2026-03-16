@@ -1,66 +1,236 @@
+<div align="center">
+
+<img src="https://img.shields.io/badge/SvindelSjekk-Anti--Scam%20Platform-1d4ed8?style=for-the-badge&logo=shield&logoColor=white" alt="SvindelSjekk" />
+
 # 🛡️ SvindelSjekk
 
-Enkel og gratis webapp som hjelper nordmenn å sjekke om en SMS, e-post eller lenke er svindel.
-Ingen innlogging. Ingen lagring av meldinger.
+**Real-time scam detection platform for Norway**
+
+Gratis · Ingen innlogging · Optimalisert for eldre brukere
+
+[![Live Demo](https://img.shields.io/badge/🌐_Live_Demo-svindel--sjekk--zch7.vercel.app-1d4ed8?style=flat-square)](https://svindel-sjekk-zch7.vercel.app)
+[![Next.js](https://img.shields.io/badge/Next.js-14.2-black?style=flat-square&logo=next.js)](https://nextjs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://typescriptlang.org)
+[![Vercel](https://img.shields.io/badge/Deployed_on-Vercel-000?style=flat-square&logo=vercel)](https://vercel.com)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
+[![Timestamped](https://img.shields.io/badge/Ownership-OpenTimestamps_Verified-orange?style=flat-square)](https://opentimestamps.org)
+
+</div>
 
 ---
 
-## 🚀 Installasjon — steg for steg
+## 📌 Om prosjektet
 
-### Steg 1 — Last ned og pakk ut prosjektet
-Last ned ZIP-filen og pakk den ut på datamaskinen din.
+**SvindelSjekk** er en gratis webapplikasjon som hjelper nordmenn — særlig eldre — med å sjekke om en SMS, e-post eller lenke er svindel. Ingen registrering, ingen lagring av meldinger.
 
-### Steg 2 — Installer Node.js (hvis du ikke har det)
-Gå til [nodejs.org](https://nodejs.org) og last ned **LTS**-versjonen.
+Norge er blant landene med høyest forekomst av digital svindel i Norden. SvindelSjekk er bygget for å gi alle enkel tilgang til kraftige verktøy som tidligere bare var tilgjengelige for eksperter.
 
-### Steg 3 — Opprett GitHub-repo
-1. Gå til [github.com](https://github.com) og logg inn
-2. Klikk **New repository**
-3. Navn: `svindelsjekk`
-4. Klikk **Create repository**
+> 🕐 **Intellectual property notice:** This project has been cryptographically timestamped via [OpenTimestamps](https://opentimestamps.org) — a blockchain-based proof of existence service. The timestamp provides immutable proof of the project's creation date and ownership.
 
-### Steg 4 — Push koden til GitHub
-Åpne terminal i prosjektmappen og kjør:
-```bash
-git init
-git add .
-git commit -m "SvindelSjekk første versjon"
-git branch -M main
-git remote add origin https://github.com/DITT-BRUKERNAVN/svindelsjekk.git
-git push -u origin main
+---
+
+## ✨ Funksjoner
+
+| Funksjon | Beskrivelse |
+|----------|-------------|
+| 🔍 **5-lags deteksjon** | Google Safe Browsing + destroy.tools + URLhaus + VirusTotal + pattern matching |
+| 💬 **SMS & lenkesjekk** | Analyser meldingstekst eller bare lim inn en URL |
+| 📊 **Live statistikk** | Dashboard med daglige trender og hvilke databaser som oppdager mest |
+| 📰 **Nyheter & advarsler** | Blogg med siste svindelforsøk i Norge |
+| 🚨 **Rapportering** | Brukere kan rapportere svindel — lagres i Supabase |
+| 📞 **Nødnumre** | Direkte tilgang til Politiet, Forbrukerrådet og nødnummer |
+| 🇳🇴 **Norsk UI** | Fullt norsk grensesnitt, stor tekst for eldre brukere |
+| ⚡ **Ingen innlogging** | Fungerer umiddelbart uten konto eller registrering |
+
+---
+
+## 🔒 Sikkerhetsarkitektur
+
+SvindelSjekk bruker **5 parallelle lag** for å oppdage trusler:
+
+```
+Bruker sender inn SMS / lenke
+              │
+    ┌─────────┴──────────┐
+    │   Parallelanalyse  │
+    └─────────┬──────────┘
+              │
+    ┌─────────▼──────────────────────────────────────┐
+    │  1. Google Safe Browsing  — phishing & malware  │
+    │  2. destroy.tools         — domenetrusler        │
+    │  3. URLhaus (abuse.ch)    — malware & botnett    │
+    │  4. VirusTotal            — 70+ AV-motorer       │
+    │  5. Pattern matching      — norske svindelord    │
+    └─────────┬──────────────────────────────────────┘
+              │
+    ┌─────────▼──────────┐
+    │  FARLIG / MISTENKELIG / TRYGG  │
+    └────────────────────┘
 ```
 
-### Steg 5 — Deploy på Vercel
-1. Gå til [vercel.com](https://vercel.com) og logg inn med GitHub
-2. Klikk **Add New Project**
-3. Velg `svindelsjekk`-repoet
-4. Klikk **Deploy** — Vercel oppdager Next.js automatisk
+---
 
-### Steg 6 — Legg til Google Safe Browsing API (valgfritt, anbefalt)
-1. Gå til [console.cloud.google.com](https://console.cloud.google.com)
-2. Opprett nytt prosjekt → **APIs & Services → Library**
-3. Søk etter **Safe Browsing API** og klikk **Enable**
-4. Gå til **Credentials → Create API Key** → kopier nøkkelen
-5. I Vercel: **Settings → Environment Variables**
-   - Name: `GOOGLE_SAFE_BROWSING_API_KEY`
-   - Value: din nøkkel
-6. Klikk **Save** → **Redeploy**
+## 🛠️ Tech Stack
 
-✅ Ferdig! SvindelSjekk er live på din Vercel-adresse.
+| Lag | Teknologi |
+|-----|-----------|
+| **Frontend** | Next.js 14, React 18, TypeScript, Tailwind CSS |
+| **Backend** | Next.js API Routes (serverless) |
+| **Database** | Supabase (PostgreSQL) |
+| **Hosting** | Vercel (Edge Network) |
+| **APIs** | Google Safe Browsing, destroy.tools, URLhaus, VirusTotal |
 
 ---
 
-## 💻 Kjør lokalt
+## 🚀 Kom i gang
+
+### Forutsetninger
+
+- [Node.js](https://nodejs.org) v18 eller nyere
+- [Git](https://git-scm.com)
+- Gratis kontoer på: [Vercel](https://vercel.com), [Supabase](https://supabase.com)
+
+### Installasjon
 
 ```bash
+# 1. Klon repoet
+git clone https://github.com/CodeBerserkers888/SvindelSjekk.git
+cd SvindelSjekk
+
+# 2. Installer avhengigheter
 npm install
+
+# 3. Konfigurer miljøvariabler
 cp .env.example .env.local
+# Rediger .env.local og legg inn API-nøkler
+
+# 4. Start utviklingsserver
 npm run dev
 ```
 
 Åpne [http://localhost:3000](http://localhost:3000)
 
+### Miljøvariabler
+
+```env
+# Google Safe Browsing (gratis) — console.cloud.google.com
+GOOGLE_SAFE_BROWSING_API_KEY=din_nokkel
+
+# VirusTotal (gratis) — virustotal.com
+VIRUSTOTAL_API_KEY=din_nokkel
+
+# Supabase — supabase.com
+NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
+SUPABASE_SERVICE_KEY=din_service_role_nokkel
+```
+
+### Database (Supabase SQL)
+
+```sql
+CREATE TABLE reports (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  text_preview text,
+  verdict text,
+  note text,
+  lang text DEFAULT 'no',
+  sources text,
+  ip text,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE blog_posts (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  title text NOT NULL,
+  slug text NOT NULL UNIQUE,
+  summary text,
+  content text,
+  category text DEFAULT 'svindel',
+  published boolean DEFAULT false,
+  published_at timestamptz DEFAULT now(),
+  created_at timestamptz DEFAULT now()
+);
+```
+
+---
+
+## 📁 Prosjektstruktur
+
+```
+src/
+├── app/
+│   ├── api/
+│   │   ├── check/          ← Hoved-analyse (alle 5 API-er parallelt)
+│   │   ├── report/         ← Lagre svindelrapporter til Supabase
+│   │   ├── stats/          ← Statistikk-API
+│   │   └── blog/           ← Blogg-API (liste + enkeltinnlegg)
+│   ├── nyheter/            ← Svindelnyheter og advarsler
+│   │   └── [slug]/         ← Enkeltartikkel
+│   ├── statistikk/         ← Live statistikkside
+│   ├── layout.tsx
+│   ├── page.tsx
+│   └── globals.css
+├── components/
+│   └── ScamChecker.tsx     ← Hoved-UI-komponent
+└── lib/
+    └── translations.ts
+```
+
+---
+
+## 🌐 Deploy på Vercel
+
+```bash
+# 1. Push til GitHub
+git push origin main
+
+# 2. Importer på vercel.com → Add New Project
+# 3. Legg til miljøvariabler i Settings → Environment Variables
+# 4. Deploy — automatisk ved hver git push
+```
+
+---
+
+## 🗺️ Veikart
+
+- [x] Google Safe Browsing API
+- [x] destroy.tools API
+- [x] URLhaus (abuse.ch) API
+- [x] VirusTotal API
+- [x] Supabase rapportering
+- [x] Statistikkdashboard
+- [x] Nyheter og advarselsblogg
+- [ ] Claude AI — intelligent tekstanalyse
+- [ ] PWA — installer som app på telefon
+- [ ] RSS-feed for automatiske nyheter
+- [ ] Rate limiting
+- [ ] Admin-panel for blogginnlegg
+- [ ] Analyse av telefonnumre
+
+---
+
+## 🔐 Intellectual Property
+
+This project has been cryptographically timestamped using **[OpenTimestamps](https://opentimestamps.org)** — a free, open-source protocol that uses the Bitcoin blockchain to provide immutable proof of existence.
+
+The timestamp serves as verifiable evidence of:
+- The project's creation date
+- Code ownership by the author
+- Priority of intellectual property
+
+> *"A timestamp proves that a document existed at a certain point in time. OpenTimestamps uses the Bitcoin blockchain as a decentralized, tamper-proof notary."*
+
 ---
 
 ## 📄 Lisens
-MIT
+
+This project is licensed under the **MIT License** — see [LICENSE](LICENSE) for details.
+
+---
+
+<div align="center">
+
+Laget med ❤️ for å beskytte nordmenn mot svindel
+
+**[🌐 Live Demo](https://svindel-sjekk-zch7.vercel.app)** · **[🐛 Rapporter en feil](https://github.com/CodeBerserkers888/SvindelSjekk/issues)** · **[⭐ Gi en stjerne](https://github.com/CodeBerserkers888/SvindelSjekk)**
+
+</div>
