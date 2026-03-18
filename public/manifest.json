@@ -1,0 +1,42 @@
+{
+  "name": "SvindelSjekk",
+  "short_name": "SvindelSjekk",
+  "description": "Sjekk om en SMS, e-post eller lenke er svindel. Gratis og uten innlogging.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#eff6ff",
+  "theme_color": "#1d4ed8",
+  "orientation": "portrait",
+  "lang": "no",
+  "categories": ["security", "utilities"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Sjekk SMS",
+      "short_name": "SMS",
+      "description": "Sjekk en mistenkelig SMS",
+      "url": "/?mode=sms",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Sjekk lenke",
+      "short_name": "Lenke",
+      "description": "Sjekk en mistenkelig lenke",
+      "url": "/?mode=link",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
