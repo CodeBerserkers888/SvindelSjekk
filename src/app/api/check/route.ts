@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimit } from "./rate-limit";
-import { rateLimit } from "./rate-limit";
 
 type Lang = "no";
 type Verdict = "FARLIG" | "MISTENKELIG" | "TRYGG";
