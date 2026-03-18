@@ -30,7 +30,7 @@ export function rateLimit(ip: string): { allowed: boolean; remaining: number; re
 // Cleanup old entries every 10 minutes
 setInterval(() => {
   const now = Date.now();
-  for (const [key, val] of requests.entries()) {
+  Array.from(requests.entries()).forEach(([key, val]) => {
     if (now > val.resetAt) requests.delete(key);
-  }
+  });
 }, 10 * 60 * 1000);
