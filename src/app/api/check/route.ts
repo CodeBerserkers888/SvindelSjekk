@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { rateLimit } from "./rate-limit";
+import { rateLimit } from "./rate-limit";
 
 type Lang = "no";
 type Verdict = "FARLIG" | "MISTENKELIG" | "TRYGG";
@@ -299,6 +301,17 @@ async function checkCloudflareRadar(urls: string[]): Promise<boolean> {
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "unknown";
+    const limit = rateLimit(ip);
+
+    if (!limit.allowed) {
+      const minutesLeft = Math.ceil(limit.resetIn / 60000);
+      return NextResponse.json(
+        { error: `For mange forespørsler. Prøv igjen om ${minutesLeft} minutter.` },
+        { status: 429, headers: { "Retry-After": String(Math.ceil(limit.resetIn / 1000)), "X-RateLimit-Remaining": "0" } }
+      );
+    }
+
     const { text, lang = "no" } = (await req.json()) as { text: string; lang: Lang };
 
     if (!text || text.trim().length < 3) return NextResponse.json({ error: "Teksten er for kort" }, { status: 400 });
