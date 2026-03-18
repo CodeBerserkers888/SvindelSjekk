@@ -11,7 +11,9 @@ Gratis · Ingen innlogging · Optimalisert for eldre brukere
 [![Live Demo](https://img.shields.io/badge/🌐_Live_Demo-svindel--sjekk--zch7.vercel.app-1d4ed8?style=flat-square)](https://svindel-sjekk-zch7.vercel.app)
 [![Next.js](https://img.shields.io/badge/Next.js-14.2-black?style=flat-square&logo=next.js)](https://nextjs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://typescriptlang.org)
+[![Supabase](https://img.shields.io/badge/Supabase-Database-3ecf8e?style=flat-square&logo=supabase&logoColor=white)](https://supabase.com)
 [![Vercel](https://img.shields.io/badge/Deployed_on-Vercel-000?style=flat-square&logo=vercel)](https://vercel.com)
+[![PWA](https://img.shields.io/badge/PWA-Ready-5a0fc8?style=flat-square&logo=pwa)](https://svindel-sjekk-zch7.vercel.app)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 [![Timestamped](https://img.shields.io/badge/Ownership-OpenTimestamps_Verified-orange?style=flat-square)](https://opentimestamps.org)
 
@@ -21,11 +23,11 @@ Gratis · Ingen innlogging · Optimalisert for eldre brukere
 
 ## 📌 Om prosjektet
 
-**SvindelSjekk** er en gratis webapplikasjon som hjelper nordmenn — særlig eldre — med å sjekke om en SMS, e-post eller lenke er svindel. Ingen registrering, ingen lagring av meldinger.
+**SvindelSjekk** er en gratis webapplikasjon som hjelper nordmenn — særlig eldre — med å sjekke om en SMS, e-post eller lenke er svindel. Ingen registrering, ingen innlogging, ingen lagring av meldinger.
 
-Norge er blant landene med høyest forekomst av digital svindel i Norden. SvindelSjekk er bygget for å gi alle enkel tilgang til kraftige verktøy som tidligere bare var tilgjengelige for eksperter.
+Norge er blant landene med høyest forekomst av digital svindel i Norden. Ifølge NORSIS opplevde over 170 000 nordmenn identitetstyveri i 2024 alene. SvindelSjekk er bygget for å gi alle enkel tilgang til kraftige verktøy som tidligere bare var tilgjengelige for eksperter.
 
-> 🕐 **Intellectual property notice:** This project has been cryptographically timestamped via [OpenTimestamps](https://opentimestamps.org) — a blockchain-based proof of existence service. The timestamp provides immutable proof of the project's creation date and ownership.
+> 🔐 **Intellectual property notice:** This project has been cryptographically timestamped via [OpenTimestamps](https://opentimestamps.org) — a blockchain-based proof of existence service providing immutable proof of creation date and ownership.
 
 ---
 
@@ -33,39 +35,47 @@ Norge er blant landene med høyest forekomst av digital svindel i Norden. Svinde
 
 | Funksjon | Beskrivelse |
 |----------|-------------|
-| 🔍 **5-lags deteksjon** | Google Safe Browsing + destroy.tools + URLhaus + VirusTotal + pattern matching |
-| 💬 **SMS & lenkesjekk** | Analyser meldingstekst eller bare lim inn en URL |
+| 🔍 **11-lags deteksjon** | 11 sikkerhetsdatabaser sjekkes parallelt på under 2 sekunder |
+| 💬 **SMS & lenkesjekk** | Analyser meldingstekst eller lim inn en URL |
+| 🔎 **Typosquatting-detektor** | Oppdager domener som ligner nav.no, skatteetaten.no, dnb.no osv. |
+| 📅 **WHOIS domenealder** | Flaggger domener registrert for mindre enn 30 dager siden |
 | 📊 **Live statistikk** | Dashboard med daglige trender og hvilke databaser som oppdager mest |
 | 📰 **Nyheter & advarsler** | Blogg med siste svindelforsøk i Norge |
 | 🚨 **Rapportering** | Brukere kan rapportere svindel — lagres i Supabase |
+| 🛡️ **Rate limiting** | Maks 20 sjekk per time per IP — beskytter API-ressurser |
+| 📱 **PWA** | Kan installeres som app på telefon og nettbrett |
 | 📞 **Nødnumre** | Direkte tilgang til Politiet, Forbrukerrådet og nødnummer |
 | 🇳🇴 **Norsk UI** | Fullt norsk grensesnitt, stor tekst for eldre brukere |
 | ⚡ **Ingen innlogging** | Fungerer umiddelbart uten konto eller registrering |
 
 ---
 
-## 🔒 Sikkerhetsarkitektur
-
-SvindelSjekk bruker **5 parallelle lag** for å oppdage trusler:
+## 🔒 Sikkerhetsarkitektur — 11 lag
 
 ```
 Bruker sender inn SMS / lenke
               │
-    ┌─────────┴──────────┐
-    │   Parallelanalyse  │
-    └─────────┬──────────┘
+    ┌─────────┴──────────────────────┐
+    │      11 parallelle sjekker     │
+    └─────────┬──────────────────────┘
               │
-    ┌─────────▼──────────────────────────────────────┐
-    │  1. Google Safe Browsing  — phishing & malware  │
-    │  2. destroy.tools         — domenetrusler        │
-    │  3. URLhaus (abuse.ch)    — malware & botnett    │
-    │  4. VirusTotal            — 70+ AV-motorer       │
-    │  5. Pattern matching      — norske svindelord    │
-    └─────────┬──────────────────────────────────────┘
+    ┌─────────▼────────────────────────────────────────────┐
+    │  1.  Google Safe Browsing   — phishing & malware      │
+    │  2.  destroy.tools          — domenetrusler           │
+    │  3.  URLhaus (abuse.ch)     — malware & botnett       │
+    │  4.  VirusTotal             — 70+ AV-motorer          │
+    │  5.  PhishTank (OpenDNS)    — crowdsourcet phishing   │
+    │  6.  ThreatFox (abuse.ch)   — malware IOC-database    │
+    │  7.  Cloudflare Radar       — sanntids URL-analyse    │
+    │  8.  WHOIS domenealder      — ny domene < 30 dager    │
+    │  9.  Typosquatting          — ligner nav.no/dnb.no?   │
+    │  10. Nøkkelord-analyse      — norske svindeluttrykk   │
+    │  11. URL-mønsteranalyse     — korte lenker & .xyz     │
+    └─────────┬────────────────────────────────────────────┘
               │
-    ┌─────────▼──────────┐
+    ┌─────────▼──────────────┐
     │  FARLIG / MISTENKELIG / TRYGG  │
-    └────────────────────┘
+    └────────────────────────┘
 ```
 
 ---
@@ -78,7 +88,9 @@ Bruker sender inn SMS / lenke
 | **Backend** | Next.js API Routes (serverless) |
 | **Database** | Supabase (PostgreSQL) |
 | **Hosting** | Vercel (Edge Network) |
-| **APIs** | Google Safe Browsing, destroy.tools, URLhaus, VirusTotal |
+| **PWA** | Service Worker, Web App Manifest |
+| **Rate Limiting** | In-memory rate limiter (20 req/time/IP) |
+| **Sikkerhet** | Google Safe Browsing, destroy.tools, URLhaus, VirusTotal, PhishTank, ThreatFox, Cloudflare Radar, WHOIS, Typosquatting |
 
 ---
 
@@ -88,7 +100,7 @@ Bruker sender inn SMS / lenke
 
 - [Node.js](https://nodejs.org) v18 eller nyere
 - [Git](https://git-scm.com)
-- Gratis kontoer på: [Vercel](https://vercel.com), [Supabase](https://supabase.com)
+- Gratis kontoer: [Vercel](https://vercel.com), [Supabase](https://supabase.com)
 
 ### Installasjon
 
@@ -102,13 +114,10 @@ npm install
 
 # 3. Konfigurer miljøvariabler
 cp .env.example .env.local
-# Rediger .env.local og legg inn API-nøkler
 
 # 4. Start utviklingsserver
 npm run dev
 ```
-
-Åpne [http://localhost:3000](http://localhost:3000)
 
 ### Miljøvariabler
 
@@ -118,6 +127,9 @@ GOOGLE_SAFE_BROWSING_API_KEY=din_nokkel
 
 # VirusTotal (gratis) — virustotal.com
 VIRUSTOTAL_API_KEY=din_nokkel
+
+# Cloudflare Radar (gratis) — dash.cloudflare.com/profile/api-tokens
+CLOUDFLARE_RADAR_API_KEY=din_nokkel
 
 # Supabase — supabase.com
 NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
@@ -159,33 +171,22 @@ CREATE TABLE blog_posts (
 src/
 ├── app/
 │   ├── api/
-│   │   ├── check/          ← Hoved-analyse (alle 5 API-er parallelt)
-│   │   ├── report/         ← Lagre svindelrapporter til Supabase
-│   │   ├── stats/          ← Statistikk-API
-│   │   └── blog/           ← Blogg-API (liste + enkeltinnlegg)
-│   ├── nyheter/            ← Svindelnyheter og advarsler
-│   │   └── [slug]/         ← Enkeltartikkel
-│   ├── statistikk/         ← Live statistikkside
+│   │   ├── check/
+│   │   │   ├── route.ts        ← 11-lags analyse
+│   │   │   └── rate-limit.ts   ← Rate limiting
+│   │   ├── report/             ← Lagre rapporter til Supabase
+│   │   ├── stats/              ← Statistikk-API
+│   │   └── blog/               ← Blogg-API
+│   ├── nyheter/                ← Svindelnyheter
+│   │   └── [slug]/             ← Enkeltartikkel
+│   ├── statistikk/             ← Live statistikkside
 │   ├── layout.tsx
 │   ├── page.tsx
 │   └── globals.css
 ├── components/
-│   └── ScamChecker.tsx     ← Hoved-UI-komponent
+│   └── ScamChecker.tsx         ← Hoved-UI
 └── lib/
     └── translations.ts
-```
-
----
-
-## 🌐 Deploy på Vercel
-
-```bash
-# 1. Push til GitHub
-git push origin main
-
-# 2. Importer på vercel.com → Add New Project
-# 3. Legg til miljøvariabler i Settings → Environment Variables
-# 4. Deploy — automatisk ved hver git push
 ```
 
 ---
@@ -196,15 +197,21 @@ git push origin main
 - [x] destroy.tools API
 - [x] URLhaus (abuse.ch) API
 - [x] VirusTotal API
+- [x] PhishTank API
+- [x] ThreatFox (abuse.ch) API
+- [x] Cloudflare Radar API
+- [x] WHOIS domenealder-sjekk
+- [x] Typosquatting-detektor
 - [x] Supabase rapportering
 - [x] Statistikkdashboard
 - [x] Nyheter og advarselsblogg
+- [x] PWA — installer som app
+- [x] Rate limiting
 - [ ] Claude AI — intelligent tekstanalyse
-- [ ] PWA — installer som app på telefon
 - [ ] RSS-feed for automatiske nyheter
-- [ ] Rate limiting
 - [ ] Admin-panel for blogginnlegg
 - [ ] Analyse av telefonnumre
+- [ ] Egen domene svindelsjekk.no
 
 ---
 
@@ -212,18 +219,11 @@ git push origin main
 
 This project has been cryptographically timestamped using **[OpenTimestamps](https://opentimestamps.org)** — a free, open-source protocol that uses the Bitcoin blockchain to provide immutable proof of existence.
 
-The timestamp serves as verifiable evidence of:
-- The project's creation date
-- Code ownership by the author
-- Priority of intellectual property
-
-> *"A timestamp proves that a document existed at a certain point in time. OpenTimestamps uses the Bitcoin blockchain as a decentralized, tamper-proof notary."*
-
 ---
 
 ## 📄 Lisens
 
-This project is licensed under the **MIT License** — see [LICENSE](LICENSE) for details.
+MIT License — see [LICENSE](LICENSE) for details.
 
 ---
 
