@@ -8,12 +8,12 @@
 
 Gratis · Ingen innlogging · Optimalisert for eldre brukere
 
-[![Live Demo](https://img.shields.io/badge/🌐_Live_Demo-svindel--sjekk--zch7.vercel.app-1d4ed8?style=flat-square)](https://svindel-sjekk-zch7.vercel.app)
+[![Live Demo](https://img.shields.io/badge/🌐_Live_Demo-svindel--sjekk--zch7.vercel.app-1d4ed8?style=flat-square)](https://svindelsjekk.no)
 [![Next.js](https://img.shields.io/badge/Next.js-14.2-black?style=flat-square&logo=next.js)](https://nextjs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://typescriptlang.org)
 [![Supabase](https://img.shields.io/badge/Supabase-Database-3ecf8e?style=flat-square&logo=supabase&logoColor=white)](https://supabase.com)
 [![Vercel](https://img.shields.io/badge/Deployed_on-Vercel-000?style=flat-square&logo=vercel)](https://vercel.com)
-[![PWA](https://img.shields.io/badge/PWA-Ready-5a0fc8?style=flat-square&logo=pwa)](https://svindel-sjekk-zch7.vercel.app)
+[![PWA](https://img.shields.io/badge/PWA-Ready-5a0fc8?style=flat-square&logo=pwa)](https://svindelsjekk.no)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 [![Timestamped](https://img.shields.io/badge/Ownership-OpenTimestamps_Verified-orange?style=flat-square)](https://opentimestamps.org)
 
@@ -231,6 +231,6 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 Laget med ❤️ for å beskytte nordmenn mot svindel
 
-**[🌐 Live Demo](https://svindel-sjekk-zch7.vercel.app)** · **[🐛 Rapporter en feil](https://github.com/CodeBerserkers888/SvindelSjekk/issues)** · **[⭐ Gi en stjerne](https://github.com/CodeBerserkers888/SvindelSjekk)**
+**[🌐 Live](https://svindelsjekk.no** · **[🐛 Rapporter en feil](https://github.com/CodeBerserkers888/SvindelSjekk/issues)** · **[⭐ Gi en stjerne](https://github.com/CodeBerserkers888/SvindelSjekk)**
 
 </div>
