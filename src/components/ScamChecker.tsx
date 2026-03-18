@@ -283,9 +283,30 @@ export default function SvindelSjekk() {
           </Link>
         </div>
 
-        <p className="text-center text-xs text-slate-400 pb-8">
-          SvindelSjekk er gratis. Vi lagrer ikke meldingene dine.
-        </p>
+        {/* Footer — Trygg På Nett */}
+        <div className="border-t border-blue-100 pt-6 pb-8 mt-2">
+          <div className="flex flex-col items-center gap-3">
+            <p className="text-xs text-slate-400 text-center">
+              SvindelSjekk er gratis. Vi lagrer ikke meldingene dine.
+            </p>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400">Et initiativ av</span>
+              <div className="flex items-center gap-1.5 bg-blue-50 border border-blue-100 rounded-xl px-3 py-1.5">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 2L3 6v7c0 5.25 4.05 10.15 9 11.25C17.95 23.15 21 18.25 21 13V6L12 2z"
+                    fill="#1d4ed8" stroke="#1d4ed8" strokeWidth="0.5"/>
+                  <path d="M8 12.5l2.5 2.5 5.5-5.5"
+                    stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                <span className="text-sm font-bold text-blue-800 tracking-tight">Trygg</span>
+                <span className="text-sm font-light text-blue-600 tracking-tight">På Nett</span>
+              </div>
+            </div>
+            <p className="text-xs text-slate-300 text-center">
+              Beskytt deg og dine mot svindel på nett
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );
