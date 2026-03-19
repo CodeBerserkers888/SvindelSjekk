@@ -7,19 +7,24 @@ const RSS_SOURCES = [
     category: "advarsel",
   },
   {
-    name: "NRK Norge",
-    url: "https://www.nrk.no/nyheter/rss.xml",
+    name: "NRK Nyheter",
+    url: "https://www.nrk.no/toppsaker.rss",
     category: "svindel",
   },
   {
-    name: "VG Nyheter",
-    url: "https://www.vg.no/rss/feed/forsiden/",
+    name: "NRK Norge",
+    url: "https://www.nrk.no/norge/toppsaker.rss",
     category: "svindel",
   },
   {
     name: "Aftenposten",
     url: "https://www.aftenposten.no/rss/",
     category: "advarsel",
+  },
+  {
+    name: "Nettavisen",
+    url: "https://www.nettavisen.no/rss.xml",
+    category: "svindel",
   },
 ];
 
@@ -28,6 +33,9 @@ const SCAM_KEYWORDS = [
   "identitetstyveri", "bankid", "sikkerhetsvarsel", "advarsel",
   "svindelforsøk", "nettsvindel", "smishing", "vishing",
   "svindlere", "lure", "falske meldinger", "falsk sms",
+  "svindeles", "kriminelle", "lureri", "forfalsket", "svindlet",
+  "sikkerhetsbrudd", "datakriminalitet", "nettkriminalitet",
+  "svindelpenger", "bedrageriet", "bankinformasjon",
 ];
 
 interface RSSItem {
