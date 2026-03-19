@@ -31,17 +31,37 @@ const TRUSTED_DOMAINS = [
 // ─── Keyword patterns ────────────────────────────────────────────────────────
 
 const DANGER_PATTERNS = [
+  // Credentials & banking
   /bankid/i, /passord/i, /kredittkort/i, /personnummer/i, /kontonummer/i,
   /bank.?konto/i, /verifiser.{0,20}konto/i, /konto.{0,20}sperr/i,
-  /din konto er/i, /du har vunnet/i, /klikk her umiddelbart/i,
-  /logg inn n[åa]/i, /bekreft.{0,20}identitet/i, /utløper.{0,20}i dag/i,
-  /mistet.{0,20}tilgang/i,
+  /din konto er/i, /kortnum.{0,10}mer/i, /cvv/i, /pinkode/i,
+  /sikkerhetskode/i, /engangskode/i, /betalingskort/i,
+  // Winning / prizes
+  /du har vunnet/i, /du er valgt/i, /du er trukket/i, /premie/i,
+  /gratis iphone/i, /gratis gave/i, /gavekort/i,
+  // Urgency / threats
+  /klikk her umiddelbart/i, /logg inn n[åa]/i, /bekreft.{0,20}identitet/i,
+  /utløper.{0,20}i dag/i, /mistet.{0,20}tilgang/i, /kontoen din vil bli slettet/i,
+  /siste sjanse/i, /innen 24 timer/i, /innen 48 timer/i,
+  /kontoen er sperret/i, /kontoen din er sperret/i, /sperret av sikkerhetsgrunner/i,
+  // Impersonation
+  /fra nav/i, /fra skatteetaten/i, /fra politiet/i, /fra dnb/i,
+  /fra vipps/i, /fra posten/i, /fra telenor/i, /fra telia/i,
+  // Payment requests
+  /betal.{0,20}gebyr/i, /toll.{0,20}avgift/i, /frigjøre.{0,20}pakke/i,
+  /utestående beløp/i, /ubetalt faktura/i, /inkasso/i,
+  // Gift card scams
+  /kjøp.{0,20}gavekort/i, /send.{0,20}gavekort/i, /itunes/i, /google play.{0,10}kort/i,
 ];
 
 const SUSPICIOUS_PATTERNS = [
-  /klikk her/i, /haster/i, /gratis/i, /bekreft/i,
+  /klikk her/i, /trykk her/i, /haster/i, /gratis/i, /bekreft/i,
   /levering.{0,20}pakke/i, /toll.{0,10}avgift/i, /send oss/i,
   /svar umiddelbart/i, /begrenset tid/i, /ikke ignorer/i,
+  /oppdater.{0,20}informasjon/i, /verifiser.{0,20}deg/i,
+  /vi trenger.{0,20}bekreftelse/i, /mistenkelig aktivitet/i,
+  /uvanlig.{0,20}aktivitet/i, /logger deg ut/i, /midlertidig sperret/i,
+  /følg lenken/i, /klikk på lenken/i, /åpne lenken/i,
 ];
 
 const SUSPICIOUS_URL_PATTERNS = [
@@ -50,6 +70,64 @@ const SUSPICIOUS_URL_PATTERNS = [
   /[a-z0-9-]+\.(xyz|top|click|loan|win|gq|ml|cf|tk|pw|work|racing|party|review|trade|download|men)\b/i,
   /dnb-/i, /vipps-/i, /sparebank-/i, /nav-/i, /posten-/i,
 ];
+
+// ─── Phone number analysis ───────────────────────────────────────────────────
+
+// Norwegian scam phone patterns
+const SUSPICIOUS_PHONE_PATTERNS = [
+  // Foreign numbers pretending to be Norwegian services
+  /\+(?!47)\d{10,15}/,           // Non-Norwegian international numbers
+  /00(?!47)\d{10,14}/,           // Non-Norwegian international format
+  // Suspicious Norwegian patterns
+  /90\d{6}/,                 // 90x numbers (often used in spam)
+];
+
+const PREMIUM_RATE_PATTERNS = [
+  /82\d{6}/,   // Premium rate 82x
+  /83\d{6}/,   // Premium rate 83x
+  /84\d{6}/,   // Premium rate 84x
+  /85\d{6}/,   // Premium rate 85x
+  /820\d{5}/,  // Premium rate
+];
+
+interface PhoneAnalysis {
+  hasSuspiciousPhone: boolean;
+  hasPremiumRate: boolean;
+  extractedNumbers: string[];
+}
+
+function analyzePhoneNumbers(text: string): PhoneAnalysis {
+  const phoneRegex = /(?:\+47|0047|47)?[\s-]?(?:\d[\s-]?){8}/g;
+  const allNumbers = text.match(phoneRegex) || [];
+  const cleanNumbers = allNumbers.map(n => n.replace(/[\s-]/g, ""));
+
+  const hasSuspiciousPhone = SUSPICIOUS_PHONE_PATTERNS.some(p => p.test(text));
+  const hasPremiumRate = PREMIUM_RATE_PATTERNS.some(p => p.test(text));
+
+  return { hasSuspiciousPhone, hasPremiumRate, extractedNumbers: cleanNumbers.slice(0, 3) };
+}
+
+// ─── Sender analysis ──────────────────────────────────────────────────────────
+
+interface SenderAnalysis {
+  isSuspiciousSender: boolean;
+  reason: string;
+}
+
+function analyzeSender(text: string): SenderAnalysis {
+  // Check for sender spoofing patterns in SMS
+  const spoofedSenders = [
+    { pattern: /^fra:?\s*(nav|skatteetaten|politiet|dnb|vipps|posten|telenor|telia|sparebank)/im, reason: "Avsender utgir seg for å være en offentlig instans" },
+    { pattern: /avsender.{0,20}(nav|skatteetaten|politiet|dnb|vipps)/im, reason: "Falsk avsender" },
+    { pattern: /melding fra.{0,30}(nav|skatteetaten|politiet|bank)/im, reason: "Utgir seg for å være offentlig instans" },
+  ];
+
+  for (const { pattern, reason } of spoofedSenders) {
+    if (pattern.test(text)) return { isSuspiciousSender: true, reason };
+  }
+
+  return { isSuspiciousSender: false, reason: "" };
+}
 
 // ─── Responses ────────────────────────────────────────────────────────────────
 
@@ -347,6 +425,10 @@ export async function POST(req: NextRequest) {
     const hasSuspiciousKeyword = SUSPICIOUS_PATTERNS.some((p) => p.test(text));
     const hasSuspiciousUrl = urls.some((u) => SUSPICIOUS_URL_PATTERNS.some((p) => p.test(u)));
 
+    // Phone & sender analysis
+    const phoneAnalysis = analyzePhoneNumbers(text);
+    const senderAnalysis = analyzeSender(text);
+
     // Sources
     const sources: string[] = [];
     if (googleHit) sources.push("Google Safe Browsing");
@@ -360,6 +442,9 @@ export async function POST(req: NextRequest) {
     if (typosquat.hit) sources.push(`Typosquatting (ligner ${typosquat.matchedDomain})`);
     if (hasDangerKeyword) sources.push("nøkkelord-analyse");
     if (hasSuspiciousUrl) sources.push("mistenkelig URL-mønster");
+    if (phoneAnalysis.hasPremiumRate) sources.push("premium-rate nummer");
+    if (phoneAnalysis.hasSuspiciousPhone) sources.push("mistenkelig telefonnummer");
+    if (senderAnalysis.isSuspiciousSender) sources.push("falsk avsender");
 
     // All checked databases
     const checkedDatabases = [
@@ -372,15 +457,17 @@ export async function POST(req: NextRequest) {
       { name: "WHOIS domenealder", found: whoisYoung, description: hasUrls ? "Sjekker om domenet ble registrert for mindre enn 30 dager siden" : "Ingen lenker å sjekke" },
       { name: "Cloudflare Radar", found: cloudflareHit, description: hasUrls ? "Cloudflares sanntidsanalyse av nettsideinnhold" : "Ingen lenker å sjekke" },
       { name: "Typosquatting-detektor", found: typosquat.hit, description: hasUrls ? `Sjekker om lenken ligner offisielle norske domener${typosquat.hit ? ` (ligner ${typosquat.matchedDomain})` : ""}` : "Ingen lenker å sjekke" },
-      { name: "Nøkkelord-analyse", found: hasDangerKeyword || hasSuspiciousKeyword, description: "Sjekker etter typiske svindelord på norsk" },
+      { name: "Nøkkelord-analyse", found: hasDangerKeyword || hasSuspiciousKeyword, description: "Sjekker etter 40+ typiske svindelord og -uttrykk på norsk" },
+      { name: "Telefonnummer-analyse", found: phoneAnalysis.hasPremiumRate || phoneAnalysis.hasSuspiciousPhone, description: "Oppdager premium-rate numre og mistenkelige utenlandske numre" },
+      { name: "Avsender-analyse", found: senderAnalysis.isSuspiciousSender, description: senderAnalysis.isSuspiciousSender ? senderAnalysis.reason : "Sjekker om avsenderen utgir seg for å være en offentlig instans" },
       { name: "URL-mønster", found: hasSuspiciousUrl, description: "Oppdager forkortede lenker og mistenkelige domeneendelser" },
     ];
 
     // Verdict
     let verdict: Verdict;
-    if (googleHit || destroyResult.critical || hasDangerKeyword || urlhausHit || virusTotalResult.critical || phishTankHit || cloudflareHit || typosquat.hit) {
+    if (googleHit || destroyResult.critical || hasDangerKeyword || urlhausHit || virusTotalResult.critical || phishTankHit || cloudflareHit || typosquat.hit || phoneAnalysis.hasPremiumRate || senderAnalysis.isSuspiciousSender) {
       verdict = "FARLIG";
-    } else if (destroyResult.hit || hasSuspiciousKeyword || hasSuspiciousUrl || virusTotalResult.hit || threatFoxHit || whoisYoung) {
+    } else if (destroyResult.hit || hasSuspiciousKeyword || hasSuspiciousUrl || virusTotalResult.hit || threatFoxHit || whoisYoung || phoneAnalysis.hasSuspiciousPhone) {
       verdict = "MISTENKELIG";
     } else {
       verdict = "TRYGG";
