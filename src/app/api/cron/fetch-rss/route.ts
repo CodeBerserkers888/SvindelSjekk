@@ -42,10 +42,10 @@ function parseRSS(xml: string): RSSItem[] {
   const itemMatches = Array.from(xml.matchAll(/<item>([\s\S]*?)<\/item>/g));
   for (const match of itemMatches) {
     const item = match[1];
-    const title = item.match(/<title>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/title>/s)?.[1]?.trim() || "";
-    const link = item.match(/<link>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/link>/s)?.[1]?.trim() ||
+    const title = item.match(/<title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/)?.[1]?.trim() || "";
+    const link = item.match(/<link>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/link>/)?.[1]?.trim() ||
                  item.match(/<link\s+href="([^"]+)"/)?.[1]?.trim() || "";
-    const description = item.match(/<description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/s)?.[1]
+    const description = item.match(/<description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/)?.[1]
       ?.replace(/<[^>]+>/g, "")?.trim()?.slice(0, 500) || "";
     const pubDate = item.match(/<pubDate>(.*?)<\/pubDate>/)?.[1]?.trim() || new Date().toISOString();
     if (title) items.push({ title, link, description, pubDate });
