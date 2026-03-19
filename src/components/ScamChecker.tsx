@@ -289,6 +289,12 @@ export default function SvindelSjekk() {
             <p className="text-xs text-slate-400 text-center">
               SvindelSjekk er gratis. Vi lagrer ikke meldingene dine.
             </p>
+            <a
+              href="mailto:kontakt@svindelsjekk.no"
+              className="text-xs text-blue-400 hover:text-blue-600 underline text-center"
+            >
+              kontakt@svindelsjekk.no
+            </a>
             <div className="flex items-center gap-2">
               <span className="text-xs text-slate-400">Et initiativ av</span>
               <div className="flex items-center gap-1.5 bg-blue-50 border border-blue-100 rounded-xl px-3 py-1.5">
