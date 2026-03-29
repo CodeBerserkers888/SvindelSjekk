@@ -708,7 +708,8 @@ function getMitreTechniques(signals: {
   if (signals.hasCredentialRequest) techniques.push(MITRE_TECHNIQUES.credentialPhishing);
   if (signals.hasSmsPattern) techniques.push(MITRE_TECHNIQUES.smishing);
   if (signals.hasImpersonation) techniques.push(MITRE_TECHNIQUES.impersBrand);
-  return [...new Map(techniques.map(t => [t.id, t])).values()];
+  const seen = new Set<string>();
+return techniques.filter(t => { if (seen.has(t.id)) return false; seen.add(t.id); return true; });
 }
 
 // ─── Risk scoring engine ──────────────────────────────────────────────────────
