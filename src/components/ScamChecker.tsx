@@ -12,7 +12,12 @@ interface CheckResult {
   explanation: string;
   tips: string[];
   sources: string[];
-  checkedDatabases: { name: string; found: boolean; description: string }[];
+  checkedDatabases: { name: string; found: boolean; description: string; category: string }[];
+  riskScore: number;
+  scoreBreakdown: { tiFeeds: number; heuristics: number; reputation: number; localSignals: number };
+  mitreTechniques: { id: string; name: string; tactic: string }[];
+  hasUrls: boolean;
+  urlCount: number;
 }
 
 const TIPS = [

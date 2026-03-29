@@ -8,7 +8,7 @@
 
 Gratis · Ingen innlogging · Optimalisert for eldre brukere
 
-[![Live Demo](https://img.shields.io/badge/🌐_Live_Demo-svindel--sjekk--zch7.vercel.app-1d4ed8?style=flat-square)](https://svindelsjekk.no)
+[![Live](https://img.shields.io/badge/🌐_Live-svindelsjekk.no-1d4ed8?style=flat-square)](https://svindelsjekk.no)
 [![Next.js](https://img.shields.io/badge/Next.js-14.2-black?style=flat-square&logo=next.js)](https://nextjs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://typescriptlang.org)
 [![Supabase](https://img.shields.io/badge/Supabase-Database-3ecf8e?style=flat-square&logo=supabase&logoColor=white)](https://supabase.com)
@@ -207,11 +207,11 @@ src/
 - [x] Nyheter og advarselsblogg
 - [x] PWA — installer som app
 - [x] Rate limiting
+- [x] Egen domene svindelsjekk.no
 - [ ] Claude AI — intelligent tekstanalyse
 - [ ] RSS-feed for automatiske nyheter
 - [ ] Admin-panel for blogginnlegg
 - [ ] Analyse av telefonnumre
-- [ ] Egen domene svindelsjekk.no
 
 ---
 
@@ -231,6 +231,6 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 Laget med ❤️ for å beskytte nordmenn mot svindel
 
-**[🌐 Live](https://svindelsjekk.no** · **[🐛 Rapporter en feil](https://github.com/CodeBerserkers888/SvindelSjekk/issues)** · **[⭐ Gi en stjerne](https://github.com/CodeBerserkers888/SvindelSjekk)**
+**[🌐 Live](https://svindelsjekk.no)** · **[🐛 Rapporter en feil](https://github.com/CodeBerserkers888/SvindelSjekk/issues)** · **[⭐ Gi en stjerne](https://github.com/CodeBerserkers888/SvindelSjekk)**
 
 </div>

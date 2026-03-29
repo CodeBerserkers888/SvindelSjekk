@@ -11,7 +11,20 @@ interface CheckResult {
   explanation: string;
   tips: string[];
   sources: string[];
-  checkedDatabases: { name: string; found: boolean; description: string }[];
+  checkedDatabases: { name: string; found: boolean; description: string; category: string }[];
+  // Scoring
+  riskScore: number;          // 0-100
+  scoreBreakdown: {
+    tiFeeds: number;          // Threat Intelligence feeds (0-40)
+    heuristics: number;       // Pattern/keyword analysis (0-30)
+    reputation: number;       // IP/domain reputation (0-20)
+    localSignals: number;     // Norwegian-specific (0-10)
+  };
+  // MITRE ATT&CK
+  mitreTechniques: { id: string; name: string; tactic: string }[];
+  // Context
+  hasUrls: boolean;
+  urlCount: number;
 }
 
 interface DestroyResult {
@@ -374,6 +387,416 @@ async function checkCloudflareRadar(urls: string[]): Promise<boolean> {
   return false;
 }
 
+
+// ─── Homoglyph detector ───────────────────────────────────────────────────────
+
+// Maps lookalike characters to their ASCII equivalents
+const HOMOGLYPH_MAP: Record<string, string> = {
+  "а": "a", "е": "e", "о": "o", "р": "p", "с": "c", "х": "x", "у": "y",
+  "ι": "i", "ο": "o", "ρ": "p", "ν": "v", "μ": "m", "ω": "w",
+  "0": "o", "1": "l", "3": "e", "4": "a", "5": "s", "6": "g", "7": "t", "8": "b",
+  "ḷ": "l", "ẹ": "e", "ạ": "a", "ọ": "o", "ụ": "u",
+  "vv": "w", "rn": "m",
+};
+
+function normalizeHomoglyphs(str: string): string {
+  let result = str;
+  for (const [glyph, ascii] of Object.entries(HOMOGLYPH_MAP)) {
+    result = result.split(glyph).join(ascii);
+  }
+  return result;
+}
+
+function checkHomoglyphs(urls: string[]): { hit: boolean; original: string; normalized: string } {
+  const TRUSTED_BRANDS = [
+    "paypal", "netflix", "apple", "microsoft", "amazon", "google",
+    "facebook", "instagram", "dnb", "vipps", "nav", "skatteetaten",
+    "sparebank", "nordea", "telenor", "telia", "posten", "bankid",
+  ];
+
+  for (const url of urls) {
+    const domain = extractDomain(url).toLowerCase();
+    if (!domain) continue;
+    const normalized = normalizeHomoglyphs(domain);
+
+    if (normalized !== domain) {
+      for (const brand of TRUSTED_BRANDS) {
+        if (normalized.includes(brand) && !domain.includes(brand)) {
+          return { hit: true, original: domain, normalized };
+        }
+      }
+    }
+  }
+  return { hit: false, original: "", normalized: "" };
+}
+
+// ─── SSL checker ──────────────────────────────────────────────────────────────
+
+async function checkSSL(urls: string[]): Promise<{ hit: boolean; reason: string }> {
+  for (const url of urls) {
+    try {
+      // Check if URL uses HTTP (no SSL at all)
+      if (url.startsWith("http://")) {
+        return { hit: true, reason: "Ingen SSL/HTTPS — usikker tilkobling" };
+      }
+
+      // Try to fetch with HTTPS and check for certificate errors
+      const domain = extractDomain(url);
+      if (!domain) continue;
+
+      const res = await fetch(`https://${domain}`, {
+        method: "HEAD",
+        signal: AbortSignal.timeout(5000),
+        redirect: "follow",
+      });
+
+      // If we get here, SSL is valid
+      // SSL valid
+    } catch (err) {
+      const msg = String(err).toLowerCase();
+      if (msg.includes("cert") || msg.includes("ssl") || msg.includes("tls") || msg.includes("certificate")) {
+        return { hit: true, reason: "Ugyldig eller utløpt SSL-sertifikat" };
+      }
+    }
+  }
+  return { hit: false, reason: "" };
+}
+
+// ─── Brreg.no (Norwegian company registry) ────────────────────────────────────
+
+async function checkBrreg(text: string): Promise<{ hit: boolean; reason: string }> {
+  // Extract org numbers (9 digits, common in Norwegian scam messages)
+  const orgNrMatch = text.match(/(\d{9})/);
+  if (!orgNrMatch) return { hit: false, reason: "" };
+
+  const orgNr = orgNrMatch[1];
+  try {
+    const res = await fetch(
+      `https://data.brreg.no/enhetsregisteret/api/enheter/${orgNr}`,
+      { signal: AbortSignal.timeout(5000) }
+    );
+
+    if (res.status === 404) {
+      return { hit: true, reason: `Org.nr. ${orgNr} finnes ikke i Brønnøysundregistrene` };
+    }
+
+    if (res.ok) {
+      const data = await res.json();
+      // Check if company is under liquidation or bankruptcy
+      if (data?.underAvvikling || data?.underTvangsavviklingEllerTvangsopplosning || data?.konkurs) {
+        return { hit: true, reason: `Selskapet (${data.navn}) er under avvikling eller konkurs` };
+      }
+    }
+  } catch { /* ignore */ }
+
+  return { hit: false, reason: "" };
+}
+
+// ─── Shodan InternetDB ────────────────────────────────────────────────────────
+
+async function checkShodan(urls: string[]): Promise<{ hit: boolean; reason: string }> {
+  for (const url of urls) {
+    try {
+      const domain = extractDomain(url);
+      if (!domain) continue;
+
+      // Resolve domain to IP first
+      const dnsRes = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=A`);
+      if (!dnsRes.ok) continue;
+      const dnsData = await dnsRes.json();
+      const ip = dnsData?.Answer?.[0]?.data;
+      if (!ip) continue;
+
+      // Check IP against Shodan InternetDB (no API key needed)
+      const shodanRes = await fetch(`https://internetdb.shodan.io/${ip}`, {
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!shodanRes.ok) continue;
+      const shodanData = await shodanRes.json();
+
+      // Check for known vulns or tags
+      if (shodanData?.vulns && shodanData.vulns.length > 0) {
+        return { hit: true, reason: `IP ${ip} har kjente sikkerhetssårbarheter (${shodanData.vulns.slice(0, 2).join(", ")})` };
+      }
+      if (shodanData?.tags && (shodanData.tags.includes("malware") || shodanData.tags.includes("self-signed"))) {
+        return { hit: true, reason: `IP ${ip} er flagget som mistenkelig av Shodan` };
+      }
+    } catch { continue; }
+  }
+  return { hit: false, reason: "" };
+}
+
+
+// ─── AbuseIPDB ────────────────────────────────────────────────────────────────
+
+async function checkAbuseIPDB(urls: string[]): Promise<{ hit: boolean; score: number }> {
+  const apiKey = process.env.ABUSEIPDB_API_KEY;
+  if (!apiKey || urls.length === 0) return { hit: false, score: 0 };
+
+  for (const url of urls) {
+    try {
+      const domain = extractDomain(url);
+      if (!domain) continue;
+
+      // Resolve to IP first via Google DNS
+      const dnsRes = await fetch(
+        `https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=A`,
+        { signal: AbortSignal.timeout(4000) }
+      );
+      if (!dnsRes.ok) continue;
+      const dnsData = await dnsRes.json();
+      const ip = dnsData?.Answer?.[0]?.data;
+      if (!ip || ip.startsWith("192.") || ip.startsWith("10.") || ip.startsWith("127.")) continue;
+
+      const res = await fetch(
+        `https://api.abuseipdb.com/api/v2/check?ipAddress=${ip}&maxAgeInDays=90`,
+        {
+          headers: { Key: apiKey, Accept: "application/json" },
+          signal: AbortSignal.timeout(5000),
+        }
+      );
+      if (!res.ok) continue;
+      const data = await res.json();
+      const score = data?.data?.abuseConfidenceScore ?? 0;
+      if (score >= 25) return { hit: true, score };
+    } catch { continue; }
+  }
+  return { hit: false, score: 0 };
+}
+
+// ─── Redirect chain analyzer ──────────────────────────────────────────────────
+
+interface RedirectResult {
+  hit: boolean;
+  chain: string[];
+  reason: string;
+}
+
+async function checkRedirectChain(urls: string[]): Promise<RedirectResult> {
+  if (urls.length === 0) return { hit: false, chain: [], reason: "" };
+
+  for (const startUrl of urls) {
+    try {
+      const chain: string[] = [startUrl];
+      let current = startUrl;
+
+      for (let i = 0; i < 8; i++) {
+        const res = await fetch(current, {
+          method: "HEAD",
+          redirect: "manual",
+          signal: AbortSignal.timeout(4000),
+        });
+
+        const location = res.headers.get("location");
+        if (!location || res.status < 300 || res.status >= 400) break;
+
+        const next = location.startsWith("http") ? location : new URL(location, current).href;
+        chain.push(next);
+        current = next;
+
+        // Check if redirect goes to suspicious domain
+        const nextDomain = extractDomain(next);
+        if (SUSPICIOUS_URL_PATTERNS.some(p => p.test(nextDomain))) {
+          return { hit: true, chain, reason: `Omdirigerer til mistenkelig domene: ${nextDomain}` };
+        }
+      }
+
+      // Long redirect chains are suspicious
+      if (chain.length >= 4) {
+        return { hit: true, chain, reason: `Lang omdirigeringskjede (${chain.length} steg)` };
+      }
+
+      // Check if final destination differs significantly from start
+      if (chain.length > 1) {
+        const startDomain = extractDomain(startUrl);
+        const endDomain = extractDomain(chain[chain.length - 1]);
+        if (startDomain !== endDomain) {
+          // Check if end domain is suspicious
+          const isEndSuspicious = SUSPICIOUS_URL_PATTERNS.some(p => p.test(endDomain));
+          if (isEndSuspicious) {
+            return { hit: true, chain, reason: `Skjult destinasjon: ${endDomain}` };
+          }
+        }
+      }
+    } catch { continue; }
+  }
+  return { hit: false, chain: [], reason: "" };
+}
+
+// ─── Email header analyzer (SPF/DKIM/DMARC) ──────────────────────────────────
+
+interface EmailHeaderResult {
+  hit: boolean;
+  issues: string[];
+}
+
+function analyzeEmailHeaders(text: string): EmailHeaderResult {
+  const issues: string[] = [];
+
+  // Check for pasted email headers
+  const hasHeaders = /^(from|to|subject|date|message-id|received|mime-version|content-type):/im.test(text);
+  if (!hasHeaders) return { hit: false, issues: [] };
+
+  // SPF check
+  const spfHeader = text.match(/received-spf:\s*(\w+)/i)?.[1]?.toLowerCase();
+  if (spfHeader === "fail" || spfHeader === "softfail") {
+    issues.push(`SPF ${spfHeader.toUpperCase()}: Avsenderen er ikke autorisert`);
+  }
+
+  // DKIM check
+  const dkimResult = text.match(/dkim=(\w+)/i)?.[1]?.toLowerCase();
+  if (dkimResult === "fail" || dkimResult === "none") {
+    issues.push("DKIM-signatur mangler eller er ugyldig");
+  }
+
+  // DMARC check
+  const dmarcResult = text.match(/dmarc=(\w+)/i)?.[1]?.toLowerCase();
+  if (dmarcResult === "fail" || dmarcResult === "none") {
+    issues.push("DMARC-validering feilet");
+  }
+
+  // Check for mismatched From vs Reply-To
+  const fromMatch = text.match(/^from:.*?([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/im)?.[1]?.toLowerCase();
+  const replyToMatch = text.match(/^reply-to:.*?([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/im)?.[1]?.toLowerCase();
+  if (fromMatch && replyToMatch && fromMatch !== replyToMatch) {
+    const fromDomain = fromMatch.split("@")[1];
+    const replyDomain = replyToMatch.split("@")[1];
+    if (fromDomain !== replyDomain) {
+      issues.push(`Mistenkelig: From (${fromDomain}) og Reply-To (${replyDomain}) er forskjellige domener`);
+    }
+  }
+
+  // Check for suspicious sending IPs in Received headers
+  const receivedHeaders = text.match(/received: from .+/gi) || [];
+  for (const header of receivedHeaders) {
+    if (SUSPICIOUS_PHONE_PATTERNS.some(p => p.test(header))) {
+      issues.push("Mistenkelig avsender-IP i e-posthoder");
+      break;
+    }
+  }
+
+  return { hit: issues.length > 0, issues };
+}
+
+
+// ─── MITRE ATT&CK mapping ─────────────────────────────────────────────────────
+
+const MITRE_TECHNIQUES = {
+  phishing:           { id: "T1566",   name: "Phishing",                    tactic: "Initial Access" },
+  spearphishing:      { id: "T1566.001", name: "Spearphishing Attachment",  tactic: "Initial Access" },
+  domainImpersonation:{ id: "T1583.001", name: "Domains",                   tactic: "Resource Development" },
+  homoglyph:          { id: "T1036.008", name: "Masquerading — Homoglyph",  tactic: "Defense Evasion" },
+  urlRedirect:        { id: "T1608.005", name: "Link Target",               tactic: "Resource Development" },
+  credentialPhishing: { id: "T1056.003", name: "Web Portal Capture",        tactic: "Collection" },
+  smishing:           { id: "T1660",    name: "Phishing via SMS",           tactic: "Initial Access" },
+  impersBrand:        { id: "T1598.003", name: "Spearphishing via Service", tactic: "Reconnaissance" },
+};
+
+function getMitreTechniques(signals: {
+  hasPhishingUrl: boolean;
+  hasDangerKeyword: boolean;
+  hasHomoglyph: boolean;
+  hasRedirect: boolean;
+  hasCredentialRequest: boolean;
+  hasSmsPattern: boolean;
+  hasImpersonation: boolean;
+}): { id: string; name: string; tactic: string }[] {
+  const techniques: { id: string; name: string; tactic: string }[] = [];
+  if (signals.hasPhishingUrl || signals.hasDangerKeyword) techniques.push(MITRE_TECHNIQUES.phishing);
+  if (signals.hasHomoglyph) techniques.push(MITRE_TECHNIQUES.homoglyph);
+  if (signals.hasRedirect) techniques.push(MITRE_TECHNIQUES.urlRedirect);
+  if (signals.hasCredentialRequest) techniques.push(MITRE_TECHNIQUES.credentialPhishing);
+  if (signals.hasSmsPattern) techniques.push(MITRE_TECHNIQUES.smishing);
+  if (signals.hasImpersonation) techniques.push(MITRE_TECHNIQUES.impersBrand);
+  return [...new Map(techniques.map(t => [t.id, t])).values()];
+}
+
+// ─── Risk scoring engine ──────────────────────────────────────────────────────
+
+interface ScoreBreakdown {
+  tiFeeds: number;
+  heuristics: number;
+  reputation: number;
+  localSignals: number;
+}
+
+function calculateRiskScore(hits: {
+  // TI feeds (max 40)
+  googleHit: boolean;
+  urlhausHit: boolean;
+  phishTankHit: boolean;
+  destroyHit: boolean;
+  destroyCritical: boolean;
+  threatFoxHit: boolean;
+  virusTotalHit: boolean;
+  virusTotalCritical: boolean;
+  cloudflareHit: boolean;
+  // Heuristics (max 30)
+  hasDangerKeyword: boolean;
+  hasSuspiciousKeyword: boolean;
+  hasSuspiciousUrl: boolean;
+  hasHomoglyph: boolean;
+  hasSslIssue: boolean;
+  hasRedirect: boolean;
+  hasEmailIssue: boolean;
+  whoisYoung: boolean;
+  // Reputation (max 20)
+  abuseIPHit: boolean;
+  abuseIPScore: number;
+  shodanHit: boolean;
+  // Norwegian local signals (max 10)
+  hasPremiumPhone: boolean;
+  hasSuspiciousPhone: boolean;
+  hasFakeSender: boolean;
+  brregHit: boolean;
+  hasTyposquatting: boolean;
+}): { total: number; breakdown: ScoreBreakdown } {
+
+  // TI feeds — max 40
+  let tiFeeds = 0;
+  if (hits.googleHit)          tiFeeds += 15;
+  if (hits.urlhausHit)         tiFeeds += 12;
+  if (hits.phishTankHit)       tiFeeds += 12;
+  if (hits.cloudflareHit)      tiFeeds += 10;
+  if (hits.destroyCritical)    tiFeeds += 10;
+  else if (hits.destroyHit)    tiFeeds += 6;
+  if (hits.virusTotalCritical) tiFeeds += 10;
+  else if (hits.virusTotalHit) tiFeeds += 6;
+  if (hits.threatFoxHit)       tiFeeds += 8;
+  tiFeeds = Math.min(40, tiFeeds);
+
+  // Heuristics — max 30
+  let heuristics = 0;
+  if (hits.hasDangerKeyword)   heuristics += 12;
+  if (hits.hasHomoglyph)       heuristics += 10;
+  if (hits.hasEmailIssue)      heuristics += 8;
+  if (hits.hasRedirect)        heuristics += 6;
+  if (hits.hasSuspiciousKeyword) heuristics += 5;
+  if (hits.hasSuspiciousUrl)   heuristics += 5;
+  if (hits.hasSslIssue)        heuristics += 4;
+  if (hits.whoisYoung)         heuristics += 4;
+  heuristics = Math.min(30, heuristics);
+
+  // Reputation — max 20
+  let reputation = 0;
+  if (hits.abuseIPHit) reputation += Math.min(15, Math.round(hits.abuseIPScore / 10));
+  if (hits.shodanHit)  reputation += 8;
+  reputation = Math.min(20, reputation);
+
+  // Norwegian local signals — max 10
+  let localSignals = 0;
+  if (hits.hasPremiumPhone)    localSignals += 5;
+  if (hits.hasFakeSender)      localSignals += 4;
+  if (hits.brregHit)           localSignals += 4;
+  if (hits.hasTyposquatting)   localSignals += 4;
+  if (hits.hasSuspiciousPhone) localSignals += 2;
+  localSignals = Math.min(10, localSignals);
+
+  const total = Math.min(100, tiFeeds + heuristics + reputation + localSignals);
+
+  return { total, breakdown: { tiFeeds, heuristics, reputation, localSignals } };
+}
+
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
@@ -407,6 +830,11 @@ export async function POST(req: NextRequest) {
       threatFoxHit,
       whoisYoung,
       cloudflareHit,
+      sslResult,
+      brregResult,
+      shodanResult,
+      abuseIPResult,
+      redirectResult,
     ] = await Promise.all([
       checkGoogleSafeBrowsing(urls),
       checkDestroyTools(urls),
@@ -416,9 +844,16 @@ export async function POST(req: NextRequest) {
       checkThreatFox(urls),
       checkWhoisAge(urls),
       checkCloudflareRadar(urls),
+      checkSSL(urls),
+      checkBrreg(text),
+      checkShodan(urls),
+      checkAbuseIPDB(urls),
+      checkRedirectChain(urls),
     ]);
 
     const typosquat = checkTyposquatting(urls);
+    const homoglyphResult = checkHomoglyphs(urls);
+    const emailHeaderResult = analyzeEmailHeaders(text);
 
     // Pattern analysis
     const hasDangerKeyword = DANGER_PATTERNS.some((p) => p.test(text));
@@ -445,40 +880,95 @@ export async function POST(req: NextRequest) {
     if (phoneAnalysis.hasPremiumRate) sources.push("premium-rate nummer");
     if (phoneAnalysis.hasSuspiciousPhone) sources.push("mistenkelig telefonnummer");
     if (senderAnalysis.isSuspiciousSender) sources.push("falsk avsender");
+    if (homoglyphResult.hit) sources.push("homoglyph-angrep");
+    if (sslResult.hit) sources.push("SSL-problem");
+    if (brregResult.hit) sources.push("Brreg.no");
+    if (shodanResult.hit) sources.push("Shodan InternetDB");
+    if (abuseIPResult.hit) sources.push(`AbuseIPDB (score: ${abuseIPResult.score}%)`);
+    if (redirectResult.hit) sources.push("Redirect chain");
+    if (emailHeaderResult.hit) sources.push("E-posthoder (SPF/DKIM/DMARC)");
 
     // All checked databases
     const checkedDatabases = [
-      { name: "Google Safe Browsing", found: googleHit, description: hasUrls ? "Googles database med millioner av kjente svindelnettsteder" : "Ingen lenker å sjekke" },
-      { name: "destroy.tools", found: destroyResult.hit, description: hasUrls ? "Spesialisert database for phishing og svindeldomener" : "Ingen lenker å sjekke" },
-      { name: "URLhaus (abuse.ch)", found: urlhausHit, description: hasUrls ? "Community-drevet database for skadelig programvare" : "Ingen lenker å sjekke" },
-      { name: "VirusTotal", found: virusTotalResult.hit, description: hasUrls ? "70+ antivirusmotorer analyserer lenken" : "Ingen lenker å sjekke" },
-      { name: "PhishTank", found: phishTankHit, description: hasUrls ? "Crowdsourcet phishing-database fra OpenDNS" : "Ingen lenker å sjekke" },
-      { name: "ThreatFox (abuse.ch)", found: threatFoxHit, description: hasUrls ? "Database for malware og botnett-indikatorer" : "Ingen lenker å sjekke" },
-      { name: "WHOIS domenealder", found: whoisYoung, description: hasUrls ? "Sjekker om domenet ble registrert for mindre enn 30 dager siden" : "Ingen lenker å sjekke" },
-      { name: "Cloudflare Radar", found: cloudflareHit, description: hasUrls ? "Cloudflares sanntidsanalyse av nettsideinnhold" : "Ingen lenker å sjekke" },
-      { name: "Typosquatting-detektor", found: typosquat.hit, description: hasUrls ? `Sjekker om lenken ligner offisielle norske domener${typosquat.hit ? ` (ligner ${typosquat.matchedDomain})` : ""}` : "Ingen lenker å sjekke" },
-      { name: "Nøkkelord-analyse", found: hasDangerKeyword || hasSuspiciousKeyword, description: "Sjekker etter 40+ typiske svindelord og -uttrykk på norsk" },
-      { name: "Telefonnummer-analyse", found: phoneAnalysis.hasPremiumRate || phoneAnalysis.hasSuspiciousPhone, description: "Oppdager premium-rate numre og mistenkelige utenlandske numre" },
-      { name: "Avsender-analyse", found: senderAnalysis.isSuspiciousSender, description: senderAnalysis.isSuspiciousSender ? senderAnalysis.reason : "Sjekker om avsenderen utgir seg for å være en offentlig instans" },
-      { name: "URL-mønster", found: hasSuspiciousUrl, description: "Oppdager forkortede lenker og mistenkelige domeneendelser" },
+      { name: "Google Safe Browsing", found: googleHit, category: "TI Feed", description: hasUrls ? "Googles database med millioner av kjente svindelnettsteder" : "Ingen lenker å sjekke" },
+      { name: "destroy.tools", found: destroyResult.hit, category: "TI Feed", description: hasUrls ? "Spesialisert database for phishing og svindeldomener" : "Ingen lenker å sjekke" },
+      { name: "URLhaus (abuse.ch)", found: urlhausHit, category: "TI Feed", description: hasUrls ? "Community-drevet database for skadelig programvare" : "Ingen lenker å sjekke" },
+      { name: "VirusTotal", found: virusTotalResult.hit, category: "TI Feed", description: hasUrls ? "70+ antivirusmotorer analyserer lenken" : "Ingen lenker å sjekke" },
+      { name: "PhishTank", found: phishTankHit, category: "TI Feed", description: hasUrls ? "Crowdsourcet phishing-database fra OpenDNS" : "Ingen lenker å sjekke" },
+      { name: "ThreatFox (abuse.ch)", found: threatFoxHit, category: "TI Feed", description: hasUrls ? "Database for malware og botnett-indikatorer" : "Ingen lenker å sjekke" },
+      { name: "WHOIS domenealder", found: whoisYoung, category: "Heuristikk", description: hasUrls ? "Sjekker om domenet ble registrert for mindre enn 30 dager siden" : "Ingen lenker å sjekke" },
+      { name: "Cloudflare Radar", found: cloudflareHit, category: "TI Feed", description: hasUrls ? "Cloudflares sanntidsanalyse av nettsideinnhold" : "Ingen lenker å sjekke" },
+      { name: "Typosquatting-detektor", found: typosquat.hit, category: "Heuristikk", description: hasUrls ? `Sjekker om lenken ligner offisielle norske domener${typosquat.hit ? ` (ligner ${typosquat.matchedDomain})` : ""}` : "Ingen lenker å sjekke" },
+      { name: "Nøkkelord-analyse", found: hasDangerKeyword || hasSuspiciousKeyword, category: "Heuristikk", description: "Sjekker etter 40+ typiske svindelord og -uttrykk på norsk" },
+      { name: "Telefonnummer-analyse", found: phoneAnalysis.hasPremiumRate || phoneAnalysis.hasSuspiciousPhone, category: "Norsk", description: "Oppdager premium-rate numre og mistenkelige utenlandske numre" },
+      { name: "Avsender-analyse", found: senderAnalysis.isSuspiciousSender, category: "Norsk", description: senderAnalysis.isSuspiciousSender ? senderAnalysis.reason : "Sjekker om avsenderen utgir seg for å være en offentlig instans" },
+      { name: "URL-mønster", found: hasSuspiciousUrl, category: "Heuristikk", description: "Oppdager forkortede lenker og mistenkelige domeneendelser" },
+      { name: "Homoglyph-detektor", found: homoglyphResult.hit, category: "Heuristikk", description: hasUrls ? `Oppdager lookalike-tegn (paypa1.com istedenfor paypal.com)${homoglyphResult.hit ? ": " + homoglyphResult.original : ""}` : "Ingen lenker å sjekke" },
+      { name: "SSL-sjekker", found: sslResult.hit, category: "Heuristikk", description: hasUrls ? (sslResult.reason || "Sjekker SSL-sertifikat og HTTPS") : "Ingen lenker å sjekke" },
+      { name: "Brreg.no register", found: brregResult.hit, category: "Norsk", description: brregResult.reason || "Sjekker org.nr. mot Brønnøysundregistrene" },
+      { name: "Shodan InternetDB", found: shodanResult.hit, category: "Omdømme", description: hasUrls ? (shodanResult.reason || "Sjekker IP for kjente sårbarheter") : "Ingen lenker å sjekke" },
+      { name: "AbuseIPDB", found: abuseIPResult.hit, category: "Omdømme", description: hasUrls ? (abuseIPResult.hit ? `IP har ${abuseIPResult.score}% misbruksscore` : "Sjekker IP mot misbruks-database") : "Ingen lenker å sjekke" },
+      { name: "Redirect chain", found: redirectResult.hit, category: "Heuristikk", description: hasUrls ? (redirectResult.reason || "Sporer URL-omdirigeringer til skjult destinasjon") : "Ingen lenker å sjekke" },
+      { name: "E-posthoder (SPF/DKIM/DMARC)", found: emailHeaderResult.hit, category: "Heuristikk", description: emailHeaderResult.hit ? emailHeaderResult.issues[0] : "Lim inn e-posthoder for autentisitetssjekk" },
     ];
 
-    // Verdict
+    // ─── Risk scoring ────────────────────────────────────────────────────────────
+    const { total: riskScore, breakdown: scoreBreakdown } = calculateRiskScore({
+      googleHit, urlhausHit, phishTankHit,
+      destroyHit: destroyResult.hit, destroyCritical: destroyResult.critical,
+      threatFoxHit, virusTotalHit: virusTotalResult.hit, virusTotalCritical: virusTotalResult.critical,
+      cloudflareHit,
+      hasDangerKeyword, hasSuspiciousKeyword, hasSuspiciousUrl,
+      hasHomoglyph: homoglyphResult.hit, hasSslIssue: sslResult.hit,
+      hasRedirect: redirectResult.hit, hasEmailIssue: emailHeaderResult.hit,
+      whoisYoung,
+      abuseIPHit: abuseIPResult.hit, abuseIPScore: abuseIPResult.score,
+      shodanHit: shodanResult.hit,
+      hasPremiumPhone: phoneAnalysis.hasPremiumRate, hasSuspiciousPhone: phoneAnalysis.hasSuspiciousPhone,
+      hasFakeSender: senderAnalysis.isSuspiciousSender, brregHit: brregResult.hit,
+      hasTyposquatting: typosquat.hit,
+    });
+
+    // ─── MITRE ATT&CK ────────────────────────────────────────────────────────────
+    const mitreTechniques = getMitreTechniques({
+      hasPhishingUrl: googleHit || phishTankHit || urlhausHit,
+      hasDangerKeyword,
+      hasHomoglyph: homoglyphResult.hit,
+      hasRedirect: redirectResult.hit,
+      hasCredentialRequest: /passord|bankid|personnummer|kontonummer|engangskode/i.test(text),
+      hasSmsPattern: phoneAnalysis.hasPremiumRate || phoneAnalysis.hasSuspiciousPhone,
+      hasImpersonation: senderAnalysis.isSuspiciousSender || typosquat.hit,
+    });
+
+    // ─── Verdict (score-based) ───────────────────────────────────────────────────
     let verdict: Verdict;
-    if (googleHit || destroyResult.critical || hasDangerKeyword || urlhausHit || virusTotalResult.critical || phishTankHit || cloudflareHit || typosquat.hit || phoneAnalysis.hasPremiumRate || senderAnalysis.isSuspiciousSender) {
+    if (riskScore >= 40) {
       verdict = "FARLIG";
-    } else if (destroyResult.hit || hasSuspiciousKeyword || hasSuspiciousUrl || virusTotalResult.hit || threatFoxHit || whoisYoung || phoneAnalysis.hasSuspiciousPhone) {
+    } else if (riskScore >= 15) {
       verdict = "MISTENKELIG";
     } else {
       verdict = "TRYGG";
     }
+
+    // ─── UX: better descriptions when no URLs ────────────────────────────────────
+    const dbWithContext = checkedDatabases.map(db => ({
+      ...db,
+      description: (!hasUrls && db.description === "Ingen lenker å sjekke")
+        ? "Kun aktiv ved URL-analyse — lim inn en lenke for full sjekk"
+        : db.description,
+    }));
 
     const result: CheckResult = {
       verdict,
       emoji: verdict === "FARLIG" ? "🚨" : verdict === "MISTENKELIG" ? "⚠️" : "✅",
       ...RESPONSES[verdict],
       sources,
-      checkedDatabases,
+      checkedDatabases: dbWithContext,
+      riskScore,
+      scoreBreakdown,
+      mitreTechniques,
+      hasUrls,
+      urlCount: urls.length,
     };
 
     return NextResponse.json(result);
