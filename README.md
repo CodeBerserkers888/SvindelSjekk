@@ -1,3 +1,13 @@
+> ## ⚠️ PROJECT STATUS: TEMPORARILY ON HOLD
+>
+> **SvindelSjekk development is temporarily paused due to personal circumstances.**
+>
+> The project is **not abandoned or discontinued**. Development will resume in the near future.
+>
+> Thank you for your patience and interest.
+
+
+
 <div align="center">
 
 <img src="https://img.shields.io/badge/SvindelSjekk-Anti--Scam%20Platform-1d4ed8?style=for-the-badge&logo=shield&logoColor=white" alt="SvindelSjekk" />
